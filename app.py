@@ -41,9 +41,9 @@ def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight
     # Detalles del modelo (columna derecha)
     pdf.set_xy(110, 30)
     pdf.set_font(base_font, 'B', subtitle_size)
-    pdf.cell(90, 7, "Detalles del Modelo", 0, 2)
+    pdf.cell(90, 7, "Detalles del Modelo (Xception)", 0, 2)
     pdf.set_font(base_font, '', base_size)
-    pdf.multi_cell(90, 7, "- Repartición del dataset: 75% entrenamiento / 25% prueba\n- Épocas de entrenamiento: 20\n- Modelo utilizado: Xception")
+    pdf.multi_cell(90, 7, "- Repartición del dataset: 75% entrenamiento / 25% prueba\n- Épocas de entrenamiento: 15\n- Modelo utilizado: Xception\n- Coeficiente de Correlación de Matthews: 63.58%")
 
     pdf.ln(3)
 
