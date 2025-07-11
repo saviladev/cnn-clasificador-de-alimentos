@@ -25,70 +25,140 @@ def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight
     pdf = FPDF()
     pdf.add_page()
 
-    base_font = 'Arial'
+    # Agregar fuente Unicode normal y bold
+    pdf.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf', uni=True)
+    pdf.add_font('DejaVu', 'B', 'fonts/DejaVuSans-Bold.ttf', uni=True)
+    base_font = 'DejaVu'
     base_size = 12
-    title_size = 16
+    title_size = 18
     subtitle_size = 14
+    line_color = (200, 200, 200)
 
-    # Título
+    # Título grande y centrado
     pdf.set_font(base_font, 'B', title_size)
+    pdf.ln(8)
     pdf.cell(0, 15, t("pdf_title"), 0, 1, 'C')
-    pdf.set_line_width(0.5)
-    pdf.line(10, 25, 200, 25)
-    pdf.ln(5)
+    pdf.set_draw_color(*line_color)
+    pdf.set_line_width(0.7)
+    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+    pdf.ln(8)
 
-    # Datos generales (columna izquierda)
-    pdf.set_font(base_font, '', base_size)
-    pdf.set_xy(10, 30)
-    pdf.cell(90, 7, t("date", date=time.strftime('%d/%m/%Y %H:%M')), 0, 2)
-    pdf.cell(90, 7, t("food", food=predicted_food.replace('_', ' ').capitalize()), 0, 2)
-    pdf.cell(90, 7, t("weight", weight=weight), 0, 2)
-    if confidence is not None:
-        pdf.cell(90, 7, t("model_confidence_pdf", confidence=f"{confidence*100:.1f}"), 0, 2)
-    if processing_time is not None:
-        pdf.cell(90, 7, t("processing_time", time=f"{processing_time:.2f}"), 0, 2)
-
-    # Detalles del modelo (columna derecha)
-    pdf.set_xy(110, 30)
+    # Tabla vertical de información general (sin peso)
     pdf.set_font(base_font, 'B', subtitle_size)
-    pdf.cell(90, 7, t("pdf_model_details"), 0, 2)
+    pdf.cell(0, 10, t("general_info"), 0, 1, 'C')
     pdf.set_font(base_font, '', base_size)
-    pdf.multi_cell(90, 7, t("model_details"))
+    info_data = [
+        (t("date", date=time.strftime('%d/%m/%Y %H:%M'))),
+        (t("food", food=predicted_food.replace('_', ' ').capitalize())),
+    ]
+    if confidence is not None:
+        info_data.append(t("model_confidence_pdf", confidence=f"{confidence*100:.1f}"))
+    if processing_time is not None:
+        info_data.append(t("processing_time", time=f"{processing_time:.2f}"))
+    col1_w, col2_w = 60, 110
+    table_x = (210 - (col1_w + col2_w)) // 2
+    for item in info_data:
+        if ':' in item:
+            k, v = item.split(':', 1)
+            pdf.set_x(table_x)
+            pdf.set_fill_color(240, 240, 240)
+            pdf.cell(col1_w, 10, k.strip() + ':', 1, 0, 'R', True)
+            pdf.cell(col2_w, 10, v.strip(), 1, 1, 'L')
+    pdf.ln(8)
+    pdf.set_draw_color(*line_color)
+    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+    pdf.ln(8)
 
-    pdf.ln(3)
-
-    # Imagen
+    # Imagen centrada
     img_path = "temp_img.png"
     image.save(img_path)
-    pdf.image(img_path, x=55, w=90)
+    img_w = 80
+    img_x = (210 - img_w) // 2
+    img_y = pdf.get_y()
+    aspect = image.height / image.width
+    img_h = img_w * aspect
+    pdf.image(img_path, x=img_x, y=img_y, w=img_w, h=img_h)
     os.remove(img_path)
-    pdf.ln(5)
+    pdf.set_y(img_y + img_h + 8)
 
-    # Nutrientes
+    # Tabla de valores nutricionales centrada, con peso en el título
     pdf.set_font(base_font, 'B', subtitle_size)
-    pdf.cell(0, 10, t("pdf_nutritional_values"), 0, 1)
-
+    pdf.cell(0, 10, f"{t('pdf_nutritional_values')} ({t('weight', weight=weight)})", 0, 1, 'C')
     pdf.set_font(base_font, '', base_size)
-    col_width = 95
+    col_width = 60
     row_height = 10
-
+    table_x = (210 - 2*col_width) // 2
+    pdf.set_x(table_x)
     pdf.set_fill_color(240, 240, 240)
     pdf.cell(col_width, row_height, t("nutrient"), 1, 0, 'C', True)
     pdf.cell(col_width, row_height, t("amount"), 1, 1, 'C', True)
-
     data = [
         (t("proteins_name"), f"{protein:.1f} g"),
         (t("fats_name"), f"{fat:.1f} g"),
         (t("carbs_name"), f"{carbs:.1f} g"),
         (t("calories_name"), f"{kcal:.1f} kcal")
     ]
-
     for i, (nutrient, value) in enumerate(data):
         fill = 240 if i % 2 == 0 else 255
         pdf.set_fill_color(fill, fill, fill)
+        pdf.set_x(table_x)
         pdf.cell(col_width, row_height, nutrient, 1, 0, 'L', True)
         pdf.cell(col_width, row_height, value, 1, 1, 'C', True)
+    pdf.ln(8)
+    pdf.set_draw_color(*line_color)
+    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+    pdf.ln(8)
 
+    # Tabla vertical de detalles del modelo
+    pdf.set_font(base_font, 'B', subtitle_size)
+    pdf.cell(0, 10, t("model_table_title"), 0, 1, 'C')
+    pdf.set_font(base_font, '', base_size)
+    model_table = [
+        (t("model_table_model"), "Xception"),
+        (t("model_table_split"), "75% / 25%"),
+        (t("model_table_epochs"), "15"),
+        (t("model_table_metric"), "63.58%")
+    ]
+    col1_w, col2_w = 60, 110
+    table_x = (210 - (col1_w + col2_w)) // 2
+    for k, v in model_table:
+        pdf.set_x(table_x)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(col1_w, 10, k, 1, 0, 'R', True)
+        pdf.cell(col2_w, 10, v, 1, 1, 'L')
+    pdf.ln(8)
+    pdf.set_draw_color(*line_color)
+    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+    pdf.ln(8)
+
+    # Tabla de McNemar en formato vertical
+    pdf.set_font(base_font, 'B', subtitle_size)
+    pdf.cell(0, 10, t("mcnemar_title"), 0, 1, 'C')
+    pdf.set_font(base_font, '', base_size)
+    mcnemar_data = [
+        (t("mcnemar_r50_xc"), "3059.0", "0.28618", t("mcnemar_no_diff")),
+        (t("mcnemar_v3_xc"), "2924.0", "0.73445", t("mcnemar_no_diff")),
+    ]
+    col1_w, col2_w = 60, 110
+    table_x = (210 - (col1_w + col2_w)) // 2
+    for comparison, stat, pval, conclusion in mcnemar_data:
+        pdf.set_x(table_x)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(col1_w, 10, t("mcnemar_comparison"), 1, 0, 'R', True)
+        pdf.cell(col2_w, 10, comparison, 1, 1, 'L')
+        pdf.set_x(table_x)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(col1_w, 10, t("mcnemar_statistic"), 1, 0, 'R', True)
+        pdf.cell(col2_w, 10, stat, 1, 1, 'L')
+        pdf.set_x(table_x)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(col1_w, 10, t("mcnemar_pvalue"), 1, 0, 'R', True)
+        pdf.cell(col2_w, 10, pval, 1, 1, 'L')
+        pdf.set_x(table_x)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(col1_w, 10, t("mcnemar_conclusion"), 1, 0, 'R', True)
+        pdf.cell(col2_w, 10, conclusion, 1, 1, 'L')
+        pdf.ln(4)
     pdf.ln(8)
 
     output_path = "reporte_nutricional.pdf"
