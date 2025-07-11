@@ -1,101 +1,101 @@
-english,spanish
-afternoon_tea,merienda
-apple_pie,tarta de manzana
-baby_back_ribs,costillas BBQ
-baklava,baklava
-beef_carpaccio,carpaccio de res
-beef_tartare,tartar de res
-beet_salad,ensalada de remolacha
-beignets,buñuelos
-bibimbap,bibimbap
-bread_pudding,pudín de pan
-breakfast_burrito,burrito de desayuno
-bruschetta,bruschetta
-caesar_salad,ensalada césar
-cannoli,cannoli
-caprese_salad,ensalada caprese
-carrot_cake,pastel de zanahoria
-ceviche,ceviche
-cheesecake,tarta de queso
-cheese_plate,tabla de quesos
-chicken_curry,curry de pollo
-chicken_quesadilla,quesadilla de pollo
-chicken_wings,alitas de pollo
-chocolate_cake,pastel de chocolate
-chocolate_mousse,mousse de chocolate
-churros,churros
-clam_chowder,sopa de almejas
-club_sandwich,club sándwich
-crab_cakes,tortitas de cangrejo
-creme_brulee,crema catalana
-croque_madame,croque madame
-cupcakes,ponqués
-deviled_eggs,huevos rellenos
-donuts,donas
-dumplings,empanadillas
-eggs_benedict,huevos benedict
-escargots,caracoles
-falafel,falafel
-filet_mignon,filete mignon
-fish_and_chips,pescado con papas fritas
-foie_gras,foie gras
-french_fries,papas fritas
-french_onion_soup,sopa de cebolla
-french_toast,tostada francesa
-fried_calamar,calamares fritos
-fried_rice,arroz frito
-frozen_yogurt,yogur helado
-garlic_bread,pan de ajo
-gnocchi,ñoquis
-greek_salad,ensalada griega
-grilled_cheese_sandwich,sándwich de queso a la plancha
-grilled_salmon,salmón a la parrilla
-gyoza,gyoza
-hamburger,hamburguesa
-hot_and_sour_soup,sopa agridulce
-hot_dog,perro caliente
-huevos_rancheros,huevos rancheros
-hummus,hummus
-ice_cream,helado
-lasagna,lasaña
-lobster_bisque,sopa de langosta
-lobster_roll_sandwich,sándwich de langosta
-macaroni_and_cheese,macarrones con queso
-macarons,macarons
-miso_soup,sopa miso
-mussels,mejillones
-nachos,nachos
-omelet,tortilla francesa
-onion_rings,aros de cebolla
-oysters,ostras
-pad_thai,pad thai
-paella,paella
-pancakes,panqueques
-panna_cotta,panna cotta
-peking_duck,pato a la pekinesa
-pho,pho
-pizza,pizza
-pork_chop,chuleta de cerdo
-poutine,poutine
-prime_rib,asado de tira
-pulled_pork_sandwich,sándwich de cerdo desmenuzado
-ramen,ramen
-ravioli,ravioles
-red_velvet_cake,pastel de terciopelo rojo
-risotto,risotto
-samosa,samosa
-sashimi,sashimi
-scallops,vieiras
-seaweed_salad,ensalada de algas
-shrimp_and_grits,camarones con sémola
-spaghetti_bolognese,espagueti a la boloñesa
-spaghetti_carbonara,espagueti a la carbonara
-spring_rolls,rollitos de primavera
-steak,t-bone steak
-strawberry_shortcake,brazo gitano
-sushi,sushi
-tacos,tacos
-takoyaki,takoyaki
-tiramisú,tiramisú
-tuna_tartare,tartar de atún
-waffles,gofres
+english,spanish,french
+afternoon_tea,merienda,goûter
+apple_pie,tarta de manzana,tarte aux pommes
+baby_back_ribs,costillas BBQ,travers de porc
+baklava,baklava,baklava
+beef_carpaccio,carpaccio de res,carpaccio de boeuf
+beef_tartare,tartar de res,steak tartare
+beet_salad,ensalada de remolacha,salade de betteraves
+beignets,buñuelos,beignets
+bibimbap,bibimbap,bibimbap
+bread_pudding,pudín de pan,pudding au pain
+breakfast_burrito,burrito de desayuno,burrito du petit-déjeuner
+bruschetta,bruschetta,bruschetta
+caesar_salad,ensalada césar,salade césar
+cannoli,cannoli,cannoli
+caprese_salad,ensalada caprese,salade caprese
+carrot_cake,pastel de zanahoria,gâteau aux carottes
+ceviche,ceviche,ceviche
+cheesecake,tarta de queso,gâteau au fromage
+cheese_plate,tabla de quesos,plateau de fromages
+chicken_curry,curry de pollo,curry de poulet
+chicken_quesadilla,quesadilla de pollo,quesadilla au poulet
+chicken_wings,alitas de pollo,ailes de poulet
+chocolate_cake,pastel de chocolate,gâteau au chocolat
+chocolate_mousse,mousse de chocolate,mousse au chocolat
+churros,churros,churros
+clam_chowder,sopa de almejas,chaudrée de palourdes
+club_sandwich,club sándwich,club sandwich
+crab_cakes,tortitas de cangrejo,galettes de crabe
+creme_brulee,crema catalana,crème brûlée
+croque_madame,croque madame,croque madame
+cupcakes,ponqués,petits gâteaux
+deviled_eggs,huevos rellenos,œufs mimosa
+donuts,donas,beignets
+dumplings,empanadillas,raviole vapeur
+eggs_benedict,huevos benedict,œufs bénédicte
+escargots,caracoles,escargots
+falafel,falafel,falafel
+filet_mignon,filete mignon,filet mignon
+fish_and_chips,pescado con papas fritas,poisson-frites
+foie_gras,foie gras,foie gras
+french_fries,papas fritas,frites
+french_onion_soup,sopa de cebolla,soupe à l'oignon
+french_toast,tostada francesa,pain perdu
+fried_calamar,calamares fritos,calamars frits
+fried_rice,arroz frito,riz sauté
+frozen_yogurt,yogur helado,yaourt glacé
+garlic_bread,pan de ajo,pain à l'ail
+gnocchi,ñoquis,gnocchis
+greek_salad,ensalada griega,salade grecque
+grilled_cheese_sandwich,sándwich de queso a la plancha,croque-monsieur
+grilled_salmon,salmón a la parrilla,saumon grillé
+gyoza,gyoza,gyoza
+hamburger,hamburguesa,burger
+hot_and_sour_soup,sopa agridulce,soupe piquante-aigre
+hot_dog,perro caliente,hot-dog
+huevos_rancheros,huevos rancheros,huevos rancheros
+hummus,hummus,houmous
+ice_cream,helado,glace
+lasagna,lasaña,lasagnes
+lobster_bisque,sopa de langosta,bisque de homard
+lobster_roll_sandwich,sándwich de langosta,roll de homard
+macaroni_and_cheese,macarrones con queso,macaronis au fromage
+macarons,macarons,macarons
+miso_soup,sopa miso,soupe miso
+mussels,mejillones,moules
+nachos,nachos,nachos
+omelet,tortilla francesa,omelette
+onion_rings,aros de cebolla,beignets d'oignon
+oysters,ostras,huîtres
+pad_thai,pad thai,pad thaï
+paella,paella,paëlla
+pancakes,panqueques,crêpes
+panna_cotta,panna cotta,panna cotta
+peking_duck,pato a la pekinesa,canard laqué
+pho,pho,phở
+pizza,pizza,pizza
+pork_chop,chuleta de cerdo,côte de porc
+poutine,poutine,poutine
+prime_rib,asado de tira,entrecôte
+pulled_pork_sandwich,sándwich de cerdo desmenuzado,sandwich au porc effiloché
+ramen,ramen,ramen
+ravioli,ravioles,raviolis
+red_velvet_cake,pastel de terciopelo rojo,gâteau velours rouge
+risotto,risotto,risotto
+samosa,samosa,samoussa
+sashimi,sashimi,sashimi
+scallops,vieiras,coquilles Saint-Jacques
+seaweed_salad,ensalada de algas,salade d'algues
+shrimp_and_grits,camarones con sémola,crevettes et semoule
+spaghetti_bolognese,espagueti a la boloñesa,spaghetti bolognaise
+spaghetti_carbonara,espagueti a la carbonara,spaghetti carbonara
+spring_rolls,rollitos de primavera,nems
+steak,t-bone steak,steak
+strawberry_shortcake,brazo gitano,fraisier
+sushi,sushi,sushi
+tacos,tacos,tacos
+takoyaki,takoyaki,takoyaki
+tiramisú,tiramisú,tiramisu
+tuna_tartare,tartar de atún,tartare de thon
+waffles,gofres,gaufres
