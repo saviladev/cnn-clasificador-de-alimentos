@@ -131,6 +131,26 @@ def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight
     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
     pdf.ln(8)
 
+    # --- MATRIZ DE CONFUSIÓN ---
+    pdf.set_font(base_font, 'B', subtitle_size)
+    pdf.cell(0, 10, 'Matriz de Confusión', 0, 1, 'C')
+    confusion_img_path = 'graphics/matriz_xception_top_errores.png.jpg'
+    if os.path.exists(confusion_img_path):
+        img_w = 160
+        img_x = (210 - img_w) // 2
+        img_y = pdf.get_y()
+        from PIL import Image as PILImage
+        confusion_img = PILImage.open(confusion_img_path)
+        aspect = confusion_img.height / confusion_img.width
+        img_h = img_w * aspect
+        pdf.image(confusion_img_path, x=img_x, y=img_y, w=img_w, h=img_h)
+        pdf.set_y(img_y + img_h + 8)
+    else:
+        pdf.set_font(base_font, '', base_size)
+        pdf.cell(0, 10, 'No se encontró la imagen de la matriz de confusión.', 0, 1, 'C')
+    pdf.ln(8)
+    # --- FIN MATRIZ DE CONFUSIÓN ---
+
     # Tabla de McNemar en formato vertical
     pdf.set_font(base_font, 'B', subtitle_size)
     pdf.cell(0, 10, t("mcnemar_title"), 0, 1, 'C')

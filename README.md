@@ -82,6 +82,12 @@ streamlit run app.py
 
 ---
 
+## 2.1️⃣ Ejecución en Google Colab
+
+- **Nota:** El archivo `colab.py` está diseñado para ejecutarse en Google Colab utilizando Google Drive como almacenamiento. Para que funcione correctamente, debes subir todas las carpetas del proyecto (`data`, `fonts`, `graphics`, `models`, `utils`) a tu Google Drive, dentro de una carpeta llamada `macronutrients-app`, con excepción de la carpeta `trainings`, que no es necesaria para la ejecución de la app en Colab. Así, el entorno de Colab podrá acceder a todos los recursos requeridos por la aplicación.
+
+---
+
 ## 3️⃣ Modelos
 
 Debido a las restricciones de tamaño de archivo en GitHub, los modelos entrenados (`.h5`) no están incluidos en este repositorio.
