@@ -3,7 +3,7 @@
 # 1) Instalar dependencias necesarias
 !pip install -q streamlit fpdf tensorflow pandas pyngrok pytz
 
-# 2) Montar Google Drive y fijar la carpeta del proyecto
+# 2) Montar Google Drive y fijar la carpeta del proyecto
 import os, sys, time
 from google.colab import drive
 
@@ -23,7 +23,7 @@ import pandas as pd, os, time
 from fpdf import FPDF
 from utils.translations import translations
 from datetime import datetime
-import pytz                                           #  ← nuevo
+import pytz
 
 # === CONFIGURACIÓN DE IDIOMA ===
 LANGUAGES = {"Español": "es", "English": "en", "Français": "fr"}
@@ -41,7 +41,6 @@ def t(key, **kwargs):
 MODEL_PATH          = "models/xception_food101.h5"
 TRANSLATIONS_CSV    = "data/translations/food_translations.csv"
 NUTRIENTS_CSV       = "utils/food101_macronutrientes_completo.csv"
-CONF_MATRIX_PATH    = "graphics/matriz_xception_top_errores.png.jpg"
 FONT_NORMAL_PATH    = "fonts/DejaVuSans.ttf"
 FONT_BOLD_PATH      = "fonts/DejaVuSans-Bold.ttf"
 
@@ -183,37 +182,57 @@ def generate_pdf_report(image, predicted_food,
 
     pdf.ln(6); pdf.line(15, pdf.get_y(), 195, pdf.get_y()); pdf.ln(8)
 
-    # mcnemar ------------------------------------------------------------
+    # === McNemar ===
     pdf.set_font(base, "B", sub_sz)
     pdf.cell(0, 10, t("mcnemar_title"), 0, 1, "C")
     pdf.set_font(base, "", 12)
-    for comp, stat, pval, concl in [
-        (t("mcnemar_r50_xc"), "3059.0", "0.28618", t("mcnemar_no_diff")),
-        (t("mcnemar_v3_xc"),  "2924.0", "0.73445", t("mcnemar_no_diff")),
-    ]:
-        centered_row(t("mcnemar_comparison"),  comp)
-        centered_row(t("mcnemar_statistic"),   stat)
-        centered_row(t("mcnemar_pvalue"),      pval)
-        centered_row(t("mcnemar_conclusion"),  concl)
+    mcnemar_data = [
+        ("Hybrid vs ResNet50", "115.04", "0.0000", "Diferencia significativa"),
+        ("Hybrid vs InceptionV3", "126.96", "0.0000", "Diferencia significativa"),
+        ("Hybrid vs Xception", "128.75", "0.0000", "Diferencia significativa"),
+        ("ResNet50 vs InceptionV3", "0.09", "0.7658", "Sin diferencia significativa"),
+        ("ResNet50 vs Xception", "0.14", "0.7108", "Sin diferencia significativa"),
+        ("InceptionV3 vs Xception", "0.46", "0.4959", "Sin diferencia significativa"),
+    ]
+    for comp, stat, pval, concl in mcnemar_data:
+        centered_row(t("mcnemar_comparison"), comp)
+        centered_row(t("mcnemar_statistic"), stat)
+        centered_row(t("mcnemar_pvalue"), pval)
+        centered_row(t("mcnemar_conclusion"), concl)
         pdf.ln(2)
-
     pdf.ln(4)
 
-    # matriz de confusión -----------------------------------------------
-    if os.path.exists(CONF_MATRIX_PATH):
-        from PIL import Image as PILImage
-        cm_w = 140
-        with PILImage.open(CONF_MATRIX_PATH) as im:
-            cm_h = cm_w * im.height / im.width
-        if pdf.get_y() + cm_h + 14 > pdf.h - pdf.b_margin:
-            pdf.add_page()
-        pdf.set_font(base, "B", sub_sz)
-        pdf.cell(0, 10, translations[lang].get("confusion_matrix_title",
-                                               "Matriz de confusión"), 0, 1, "C")
-        pdf.ln(2)
-        xc = pdf.l_margin + (pdf.w - pdf.l_margin - pdf.r_margin - cm_w)/2
-        pdf.image(CONF_MATRIX_PATH, x=xc, w=cm_w, h=cm_h)
-        pdf.ln(4)
+    # === Matrices de confusión ===
+    from PIL import Image as PILImage
+    confusion_matrices = [
+        ("Matriz de Confusión - Xception", 'graphics/cm_Xception.png'),
+        ("Matriz de Confusión - Hybrid", 'graphics/cm_Hybrid.png'),
+        ("Matriz de Confusión - ResNet50", 'graphics/cm_ResNet50.png'),
+        ("Matriz de Confusión - InceptionV3", 'graphics/cm_InceptionV3.png'),
+    ]
+    for title, path in confusion_matrices:
+        img_w = 140
+        img_x = (210 - img_w) // 2
+        img_y = pdf.get_y()
+        if os.path.exists(path):
+            confusion_img = PILImage.open(path)
+            aspect = confusion_img.height / confusion_img.width
+            img_h = img_w * aspect
+            # Si no hay suficiente espacio, agrega una nueva página antes de escribir el título
+            if img_y + 10 + img_h + 20 > pdf.h - pdf.b_margin:
+                pdf.add_page()
+                img_y = pdf.get_y()
+            pdf.set_font(base, 'B', sub_sz)
+            pdf.cell(0, 10, title, 0, 1, 'C')
+            img_y = pdf.get_y()
+            pdf.image(path, x=img_x, y=img_y, w=img_w, h=img_h)
+            pdf.set_y(img_y + img_h + 8)
+        else:
+            pdf.set_font(base, 'B', sub_sz)
+            pdf.cell(0, 10, title, 0, 1, 'C')
+            pdf.set_font(base, '', 12)
+            pdf.cell(0, 10, f'No se encontró la imagen {title}.', 0, 1, 'C')
+        pdf.ln(8)
 
     # salida -------------------------------------------------------------
     out = "reporte_nutricional.pdf"
