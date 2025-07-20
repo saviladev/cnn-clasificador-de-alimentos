@@ -134,7 +134,7 @@ def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight
     # --- MATRIZ DE CONFUSIÓN ---
     pdf.set_font(base_font, 'B', subtitle_size)
     pdf.cell(0, 10, 'Matriz de Confusión', 0, 1, 'C')
-    confusion_img_path = 'graphics/matriz_xception_top_errores.png.jpg'
+    confusion_img_path = 'graphics/cm_Xception.png'
     if os.path.exists(confusion_img_path):
         img_w = 160
         img_x = (210 - img_w) // 2
