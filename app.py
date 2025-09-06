@@ -8,6 +8,7 @@ import pandas as pd
 import time
 from fpdf import FPDF
 import os
+import requests
 from utils.translations import translations
 
 
@@ -223,6 +224,45 @@ def load_translations():
 
 translations_df = load_translations()
 
+def download_file_from_google_drive(file_id, destination):
+    """
+    Descarga un archivo desde Google Drive usando su file_id.
+    
+    Args:
+        file_id (str): ID del archivo en Google Drive
+        destination (str): Ruta donde guardar el archivo
+    
+    Returns:
+        bool: True si la descarga fue exitosa, False en caso contrario
+    """
+    try:
+        # URL para descargar archivos grandes de Google Drive
+        url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        
+        with requests.Session() as session:
+            response = session.get(url, stream=True)
+            
+            # Manejar la confirmación de descarga para archivos grandes
+            for key, value in response.cookies.items():
+                if key.startswith('download_warning'):
+                    params = {'id': file_id, 'confirm': value}
+                    response = session.get(url, params=params, stream=True)
+                    break
+            
+            # Crear el directorio si no existe
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            
+            # Descargar el archivo
+            with open(destination, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=32768):
+                    if chunk:
+                        f.write(chunk)
+            
+            return True
+    except Exception as e:
+        st.error(f"Error descargando el archivo: {e}")
+        return False
+
 def translate_food_name(english_name, lang):
     col = {"es": "spanish", "en": "english", "fr": "french"}[lang]
     row = translations_df[translations_df["english"] == english_name]
@@ -236,10 +276,48 @@ def translate_food_name(english_name, lang):
 
 @st.cache_resource
 def load_trained_model():
+    """
+    Carga el modelo entrenado. Si no existe localmente, lo descarga desde Google Drive.
+    
+    Para usar tu propio modelo desde Google Drive:
+    1. Sube tu modelo (.h5) a Google Drive
+    2. Haz el archivo público o compartible
+    3. Obtén el file_id de la URL (la parte después de /d/ y antes de /view)
+    4. Reemplaza el GOOGLE_DRIVE_FILE_ID abajo
+    """
+    model_path = "models/xception_food101.h5"
+    
+    # ID del archivo en Google Drive (reemplaza con tu propio ID)
+    # Ejemplo de URL: https://drive.google.com/file/d/1ABC123xyz/view?usp=sharing
+    # El file_id sería: 1ABC123xyz
+    GOOGLE_DRIVE_FILE_ID = "15r4gSGDtsynjyMvQ-3ezTjDe14g4J8Bg"  # Reemplaza con tu file_id
+    
     try:
-        return load_model("models/xception_food101.h5")
+        # Verificar si el modelo existe localmente
+        if not os.path.exists(model_path):
+            st.info("Modelo no encontrado localmente. Descargando desde Google Drive...")
+            
+            # Verificar si se ha configurado un file_id válido
+            if GOOGLE_DRIVE_FILE_ID == "TU_FILE_ID_AQUI":
+                st.error("Por favor, configura el GOOGLE_DRIVE_FILE_ID en el código con tu ID de Google Drive.")
+                st.info("Instrucciones: 1) Sube tu modelo a Google Drive, 2) Haz el archivo público, 3) Copia el file_id de la URL")
+                return None
+            
+            # Descargar el modelo desde Google Drive
+            with st.spinner("Descargando modelo desde Google Drive..."):
+                success = download_file_from_google_drive(GOOGLE_DRIVE_FILE_ID, model_path)
+                
+            if not success:
+                st.error("Error al descargar el modelo desde Google Drive.")
+                return None
+            
+            st.success("Modelo descargado exitosamente desde Google Drive!")
+        
+        # Cargar el modelo
+        return load_model(model_path)
+        
     except Exception as e:
-        st.error(t("error_loading_model"))
+        st.error(f"Error cargando el modelo: {e}")
         return None
 
 model = load_trained_model()
