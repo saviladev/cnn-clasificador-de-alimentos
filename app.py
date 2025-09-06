@@ -391,13 +391,14 @@ def load_trained_model():
             st.info(f"📁 Buscando archivo en: {model_path}")
             
             # Verificar si se ha configurado un file_id válido
-            if GOOGLE_DRIVE_FILE_ID == "15r4gSGDtsynjyMvQ-3ezTjDe14g4J8Bg":
+            if GOOGLE_DRIVE_FILE_ID == "TU_FILE_ID_AQUI":
                 st.error("❌ Por favor, configura el GOOGLE_DRIVE_FILE_ID en el código con tu ID de Google Drive.")
                 st.info("📋 Instrucciones: 1) Sube tu modelo a Google Drive, 2) Haz el archivo público, 3) Copia el file_id de la URL")
                 return None
             
             # Mostrar información del archivo que se va a descargar
             st.info(f"🔗 Descargando desde Google Drive ID: {GOOGLE_DRIVE_FILE_ID}")
+            st.info(f"🌐 URL completa: https://drive.google.com/file/d/{GOOGLE_DRIVE_FILE_ID}/view")
             
             # Descargar el modelo desde Google Drive
             with st.spinner("⬇️ Descargando modelo desde Google Drive..."):
