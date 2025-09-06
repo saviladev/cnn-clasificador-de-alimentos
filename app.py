@@ -226,7 +226,7 @@ translations_df = load_translations()
 
 def download_file_from_google_drive(file_id, destination):
     """
-    Descarga un archivo desde Google Drive usando su file_id.
+    Descarga un archivo desde Google Drive usando múltiples métodos.
     
     Args:
         file_id (str): ID del archivo en Google Drive
@@ -235,72 +235,125 @@ def download_file_from_google_drive(file_id, destination):
     Returns:
         bool: True si la descarga fue exitosa, False en caso contrario
     """
-    try:
-        # URL para descargar archivos grandes de Google Drive
-        url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        
-        # Crear el directorio si no existe
-        os.makedirs(os.path.dirname(destination), exist_ok=True)
-        
-        with requests.Session() as session:
-            # Configurar headers para evitar problemas de bot detection
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
+    # Crear el directorio si no existe
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    
+    # Lista de URLs a probar (en orden de preferencia)
+    urls_to_try = [
+        f"https://drive.usercontent.google.com/download?id={file_id}&export=download",
+        f"https://drive.google.com/uc?export=download&id={file_id}",
+        f"https://docs.google.com/uc?export=download&id={file_id}"
+    ]
+    
+    for i, url in enumerate(urls_to_try):
+        try:
+            st.info(f"🔄 Intentando método {i+1}/3: {url[:50]}...")
             
-            # Primera solicitud
-            response = session.get(url, headers=headers, stream=True, timeout=30)
-            response.raise_for_status()
-            
-            # Verificar si necesita confirmación para archivos grandes
-            if 'download_warning' in response.cookies:
-                # Obtener el token de confirmación
-                for key, value in response.cookies.items():
-                    if key.startswith('download_warning'):
-                        confirm_url = f"https://drive.google.com/uc?export=download&confirm={value}&id={file_id}"
-                        response = session.get(confirm_url, headers=headers, stream=True, timeout=60)
-                        response.raise_for_status()
-                        break
-            
-            # Verificar que la respuesta contiene datos binarios (no HTML de error)
-            content_type = response.headers.get('content-type', '')
-            if 'text/html' in content_type:
-                st.error("Error: El archivo no está disponible públicamente o el enlace es incorrecto.")
-                st.info("Asegúrate de que el archivo en Google Drive esté configurado como 'Cualquier persona con el enlace puede ver'")
-                return False
-            
-            # Descargar el archivo
-            total_size = int(response.headers.get('content-length', 0))
-            downloaded = 0
-            
-            with open(destination, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        
-                        # Mostrar progreso si conocemos el tamaño total
-                        if total_size > 0:
-                            progress = downloaded / total_size
-                            st.progress(progress)
-            
-            # Verificar que el archivo se descargó correctamente
-            if os.path.exists(destination) and os.path.getsize(destination) > 0:
-                st.success(f"Archivo descargado: {os.path.getsize(destination)} bytes")
-                return True
-            else:
-                st.error("El archivo descargado está vacío o corrupto")
-                return False
+            with requests.Session() as session:
+                # Headers más completos
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1'
+                }
                 
-    except requests.exceptions.Timeout:
-        st.error("Timeout: La descarga tardó demasiado. Intenta nuevamente.")
-        return False
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error de conexión: {e}")
-        return False
-    except Exception as e:
-        st.error(f"Error inesperado descargando el archivo: {e}")
-        return False
+                # Primera solicitud
+                response = session.get(url, headers=headers, stream=True, timeout=60, allow_redirects=True)
+                
+                # Si obtenemos una respuesta exitosa
+                if response.status_code == 200:
+                    content_type = response.headers.get('content-type', '').lower()
+                    
+                    # Verificar si es HTML (página de error)
+                    if 'text/html' in content_type:
+                        # Leer un poco del contenido para verificar si es una página de confirmación
+                        first_chunk = next(response.iter_content(chunk_size=1024), b'')
+                        content_preview = first_chunk.decode('utf-8', errors='ignore')
+                        
+                        # Buscar token de confirmación en el HTML
+                        if 'confirm=' in content_preview or 'download_warning' in content_preview:
+                            st.info("📋 Archivo grande detectado, obteniendo token de confirmación...")
+                            
+                            # Extraer token de confirmación del HTML
+                            import re
+                            confirm_match = re.search(r'confirm=([^&"\']+)', content_preview)
+                            if confirm_match:
+                                confirm_token = confirm_match.group(1)
+                                confirm_url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm={confirm_token}"
+                                
+                                # Intentar con el token de confirmación
+                                response = session.get(confirm_url, headers=headers, stream=True, timeout=120)
+                                response.raise_for_status()
+                            else:
+                                st.warning(f"⚠️ Método {i+1} falló: Página HTML sin token de confirmación")
+                                continue
+                        else:
+                            st.warning(f"⚠️ Método {i+1} falló: Respuesta HTML inesperada")
+                            continue
+                    
+                    # Descargar el archivo
+                    total_size = int(response.headers.get('content-length', 0))
+                    downloaded = 0
+                    
+                    # Crear barra de progreso
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    with open(destination, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                
+                                # Actualizar progreso
+                                if total_size > 0:
+                                    progress = downloaded / total_size
+                                    progress_bar.progress(progress)
+                                    status_text.text(f"📥 Descargado: {downloaded:,} / {total_size:,} bytes ({progress*100:.1f}%)")
+                                else:
+                                    status_text.text(f"📥 Descargado: {downloaded:,} bytes")
+                    
+                    # Limpiar elementos de progreso
+                    progress_bar.empty()
+                    status_text.empty()
+                    
+                    # Verificar que el archivo se descargó correctamente
+                    if os.path.exists(destination) and os.path.getsize(destination) > 1000:  # Al menos 1KB
+                        file_size = os.path.getsize(destination)
+                        st.success(f"✅ Descarga exitosa: {file_size:,} bytes")
+                        return True
+                    else:
+                        st.warning(f"⚠️ Método {i+1} falló: Archivo muy pequeño o vacío")
+                        if os.path.exists(destination):
+                            os.remove(destination)
+                        continue
+                        
+                else:
+                    st.warning(f"⚠️ Método {i+1} falló: HTTP {response.status_code}")
+                    continue
+                    
+        except requests.exceptions.Timeout:
+            st.warning(f"⚠️ Método {i+1} falló: Timeout")
+            continue
+        except requests.exceptions.RequestException as e:
+            st.warning(f"⚠️ Método {i+1} falló: {str(e)[:100]}")
+            continue
+        except Exception as e:
+            st.warning(f"⚠️ Método {i+1} falló: Error inesperado - {str(e)[:100]}")
+            continue
+    
+    # Si llegamos aquí, todos los métodos fallaron
+    st.error("❌ Todos los métodos de descarga fallaron")
+    st.error("🔍 Verifica que:")
+    st.error("   • El archivo existe en Google Drive")
+    st.error("   • El archivo está configurado como público")
+    st.error("   • El file_id es correcto")
+    st.error("   • Tu conexión a internet funciona correctamente")
+    
+    return False
 
 def translate_food_name(english_name, lang):
     col = {"es": "spanish", "en": "english", "fr": "french"}[lang]
