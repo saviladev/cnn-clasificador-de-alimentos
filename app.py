@@ -227,7 +227,7 @@ translations_df = load_translations()
 
 def download_file_from_google_drive(file_id, destination):
     """
-    Descarga un archivo desde Google Drive usando gdown como método principal.
+    Descarga un archivo desde Google Drive de forma silenciosa.
     
     Args:
         file_id (str): ID del archivo en Google Drive
@@ -241,46 +241,21 @@ def download_file_from_google_drive(file_id, destination):
     
     # Método 1: Usar gdown (más confiable para Google Drive)
     try:
-        st.info("🔄 Método 1/2: Usando gdown (recomendado para Google Drive)")
-        
-        # URL de Google Drive para gdown
         url = f"https://drive.google.com/uc?id={file_id}"
-        
-        # Descargar usando gdown con barra de progreso
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        def progress_callback(current, total):
-            if total > 0:
-                progress = current / total
-                progress_bar.progress(progress)
-                status_text.text(f"📥 Descargado: {current:,} / {total:,} bytes ({progress*100:.1f}%)")
-        
-        # Intentar descarga con gdown
-        success = gdown.download(url, destination, quiet=False)
-        
-        # Limpiar elementos de progreso
-        progress_bar.empty()
-        status_text.empty()
+        success = gdown.download(url, destination, quiet=True)
         
         if success and os.path.exists(destination) and os.path.getsize(destination) > 1000:
-            file_size = os.path.getsize(destination)
-            st.success(f"✅ Descarga exitosa con gdown: {file_size:,} bytes")
             return True
         else:
-            st.warning("⚠️ Método 1 falló: gdown no pudo descargar el archivo")
             if os.path.exists(destination):
                 os.remove(destination)
     
-    except Exception as e:
-        st.warning(f"⚠️ Método 1 falló: Error con gdown - {str(e)[:100]}")
+    except Exception:
         if os.path.exists(destination):
             os.remove(destination)
     
-    # Método 2: Fallback con requests (método anterior)
+    # Método 2: Fallback con requests
     try:
-        st.info("🔄 Método 2/2: Usando requests como fallback")
-        
         url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download"
         
         with requests.Session() as session:
@@ -293,47 +268,17 @@ def download_file_from_google_drive(file_id, destination):
             if response.status_code == 200:
                 content_type = response.headers.get('content-type', '').lower()
                 
-                # Verificar si no es HTML
                 if 'text/html' not in content_type:
-                    total_size = int(response.headers.get('content-length', 0))
-                    downloaded = 0
-                    
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
                     with open(destination, 'wb') as f:
                         for chunk in response.iter_content(chunk_size=8192):
                             if chunk:
                                 f.write(chunk)
-                                downloaded += len(chunk)
-                                
-                                if total_size > 0:
-                                    progress = downloaded / total_size
-                                    progress_bar.progress(progress)
-                                    status_text.text(f"📥 Descargado: {downloaded:,} / {total_size:,} bytes ({progress*100:.1f}%)")
-                    
-                    progress_bar.empty()
-                    status_text.empty()
                     
                     if os.path.exists(destination) and os.path.getsize(destination) > 1000:
-                        file_size = os.path.getsize(destination)
-                        st.success(f"✅ Descarga exitosa con requests: {file_size:,} bytes")
                         return True
                 
-                st.warning("⚠️ Método 2 falló: Respuesta HTML recibida")
-            else:
-                st.warning(f"⚠️ Método 2 falló: HTTP {response.status_code}")
-                
-    except Exception as e:
-        st.warning(f"⚠️ Método 2 falló: {str(e)[:100]}")
-    
-    # Si llegamos aquí, ambos métodos fallaron
-    st.error("❌ Todos los métodos de descarga fallaron")
-    st.error("🔍 Posibles soluciones:")
-    st.error("   1. Verifica que el archivo esté configurado como público en Google Drive")
-    st.error("   2. Asegúrate de que el enlace sea: 'Cualquier persona con el enlace puede ver'")
-    st.error("   3. Intenta subir el archivo nuevamente a Google Drive")
-    st.error("   4. Verifica que el file_id sea correcto")
+    except Exception:
+        pass
     
     return False
 
@@ -352,81 +297,28 @@ def translate_food_name(english_name, lang):
 def load_trained_model():
     """
     Carga el modelo entrenado. Si no existe localmente, lo descarga desde Google Drive.
-    
-    Para usar tu propio modelo desde Google Drive:
-    1. Sube tu modelo (.h5) a Google Drive
-    2. Haz el archivo público o compartible
-    3. Obtén el file_id de la URL (la parte después de /d/ y antes de /view)
-    4. Reemplaza el GOOGLE_DRIVE_FILE_ID abajo
     """
     model_path = "models/xception_food101.h5"
-    
-    # ID del archivo en Google Drive (reemplaza con tu propio ID)
-    # Ejemplo de URL: https://drive.google.com/file/d/1ABC123xyz/view?usp=sharing
-    # El file_id sería: 1ABC123xyz
-    GOOGLE_DRIVE_FILE_ID = "15r4gSGDtsynjyMvQ-3ezTjDe14g4J8Bg"  # Reemplaza con tu file_id
+    GOOGLE_DRIVE_FILE_ID = "15r4gSGDtsynjyMvQ-3ezTjDe14g4J8Bg"
     
     try:
         # Verificar si el modelo existe localmente
         if not os.path.exists(model_path):
-            st.info("🔄 Modelo no encontrado localmente. Descargando desde Google Drive...")
-            st.info(f"📁 Buscando archivo en: {model_path}")
-            
-            # Verificar si se ha configurado un file_id válido
-            if GOOGLE_DRIVE_FILE_ID == "TU_FILE_ID_AQUI":
-                st.error("❌ Por favor, configura el GOOGLE_DRIVE_FILE_ID en el código con tu ID de Google Drive.")
-                st.info("📋 Instrucciones: 1) Sube tu modelo a Google Drive, 2) Haz el archivo público, 3) Copia el file_id de la URL")
-                return None
-            
-            # Mostrar información del archivo que se va a descargar
-            st.info(f"🔗 Descargando desde Google Drive ID: {GOOGLE_DRIVE_FILE_ID}")
-            st.info(f"🌐 URL completa: https://drive.google.com/file/d/{GOOGLE_DRIVE_FILE_ID}/view")
-            
-            # Descargar el modelo desde Google Drive
-            with st.spinner("⬇️ Descargando modelo desde Google Drive..."):
+            # Descargar el modelo desde Google Drive con un spinner simple
+            with st.spinner("Cargando modelo de IA..."):
                 success = download_file_from_google_drive(GOOGLE_DRIVE_FILE_ID, model_path)
                 
             if not success:
-                st.error("❌ Error al descargar el modelo desde Google Drive.")
-                st.error("🔍 Verifica que:")
-                st.error("   • El archivo existe en Google Drive")
-                st.error("   • El archivo está configurado como público ('Cualquier persona con el enlace puede ver')")
-                st.error("   • El file_id es correcto")
+                st.error("❌ Error al cargar el modelo. Verifica tu conexión a internet e intenta nuevamente.")
                 return None
-            
-            st.success("✅ Modelo descargado exitosamente desde Google Drive!")
-        else:
-            st.info("✅ Usando modelo local existente")
         
-        # Verificar que el archivo existe y tiene contenido antes de cargarlo
-        if not os.path.exists(model_path):
-            st.error(f"❌ El archivo del modelo no existe: {model_path}")
-            return None
-            
-        file_size = os.path.getsize(model_path)
-        if file_size == 0:
-            st.error("❌ El archivo del modelo está vacío")
-            return None
-            
-        st.info(f"📊 Cargando modelo ({file_size:,} bytes)...")
-        
-        # Cargar el modelo con manejo de errores específico
-        try:
+        # Cargar el modelo
+        with st.spinner("Inicializando modelo..."):
             model = load_model(model_path)
-            st.success("✅ Modelo cargado exitosamente!")
             return model
-        except Exception as load_error:
-            st.error(f"❌ Error específico al cargar el modelo: {load_error}")
-            st.error("🔍 Posibles causas:")
-            st.error("   • El archivo está corrupto")
-            st.error("   • El archivo no es un modelo válido de Keras/TensorFlow")
-            st.error("   • Incompatibilidad de versiones")
-            return None
         
     except Exception as e:
-        st.error(f"❌ Error inesperado: {e}")
-        import traceback
-        st.error(f"🔍 Detalles técnicos: {traceback.format_exc()}")
+        st.error("❌ Error al cargar el modelo. Por favor, recarga la página.")
         return None
 
 model = load_trained_model()
