@@ -9,6 +9,7 @@ import time
 from fpdf import FPDF
 import os
 import requests
+import gdown
 from utils.translations import translations
 
 
@@ -226,7 +227,7 @@ translations_df = load_translations()
 
 def download_file_from_google_drive(file_id, destination):
     """
-    Descarga un archivo desde Google Drive usando múltiples métodos.
+    Descarga un archivo desde Google Drive usando gdown como método principal.
     
     Args:
         file_id (str): ID del archivo en Google Drive
@@ -238,67 +239,65 @@ def download_file_from_google_drive(file_id, destination):
     # Crear el directorio si no existe
     os.makedirs(os.path.dirname(destination), exist_ok=True)
     
-    # Lista de URLs a probar (en orden de preferencia)
-    urls_to_try = [
-        f"https://drive.usercontent.google.com/download?id={file_id}&export=download",
-        f"https://drive.google.com/uc?export=download&id={file_id}",
-        f"https://docs.google.com/uc?export=download&id={file_id}"
-    ]
+    # Método 1: Usar gdown (más confiable para Google Drive)
+    try:
+        st.info("🔄 Método 1/2: Usando gdown (recomendado para Google Drive)")
+        
+        # URL de Google Drive para gdown
+        url = f"https://drive.google.com/uc?id={file_id}"
+        
+        # Descargar usando gdown con barra de progreso
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        def progress_callback(current, total):
+            if total > 0:
+                progress = current / total
+                progress_bar.progress(progress)
+                status_text.text(f"📥 Descargado: {current:,} / {total:,} bytes ({progress*100:.1f}%)")
+        
+        # Intentar descarga con gdown
+        success = gdown.download(url, destination, quiet=False)
+        
+        # Limpiar elementos de progreso
+        progress_bar.empty()
+        status_text.empty()
+        
+        if success and os.path.exists(destination) and os.path.getsize(destination) > 1000:
+            file_size = os.path.getsize(destination)
+            st.success(f"✅ Descarga exitosa con gdown: {file_size:,} bytes")
+            return True
+        else:
+            st.warning("⚠️ Método 1 falló: gdown no pudo descargar el archivo")
+            if os.path.exists(destination):
+                os.remove(destination)
     
-    for i, url in enumerate(urls_to_try):
-        try:
-            st.info(f"🔄 Intentando método {i+1}/3: {url[:50]}...")
+    except Exception as e:
+        st.warning(f"⚠️ Método 1 falló: Error con gdown - {str(e)[:100]}")
+        if os.path.exists(destination):
+            os.remove(destination)
+    
+    # Método 2: Fallback con requests (método anterior)
+    try:
+        st.info("🔄 Método 2/2: Usando requests como fallback")
+        
+        url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download"
+        
+        with requests.Session() as session:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
             
-            with requests.Session() as session:
-                # Headers más completos
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1'
-                }
+            response = session.get(url, headers=headers, stream=True, timeout=120, allow_redirects=True)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('content-type', '').lower()
                 
-                # Primera solicitud
-                response = session.get(url, headers=headers, stream=True, timeout=60, allow_redirects=True)
-                
-                # Si obtenemos una respuesta exitosa
-                if response.status_code == 200:
-                    content_type = response.headers.get('content-type', '').lower()
-                    
-                    # Verificar si es HTML (página de error)
-                    if 'text/html' in content_type:
-                        # Leer un poco del contenido para verificar si es una página de confirmación
-                        first_chunk = next(response.iter_content(chunk_size=1024), b'')
-                        content_preview = first_chunk.decode('utf-8', errors='ignore')
-                        
-                        # Buscar token de confirmación en el HTML
-                        if 'confirm=' in content_preview or 'download_warning' in content_preview:
-                            st.info("📋 Archivo grande detectado, obteniendo token de confirmación...")
-                            
-                            # Extraer token de confirmación del HTML
-                            import re
-                            confirm_match = re.search(r'confirm=([^&"\']+)', content_preview)
-                            if confirm_match:
-                                confirm_token = confirm_match.group(1)
-                                confirm_url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm={confirm_token}"
-                                
-                                # Intentar con el token de confirmación
-                                response = session.get(confirm_url, headers=headers, stream=True, timeout=120)
-                                response.raise_for_status()
-                            else:
-                                st.warning(f"⚠️ Método {i+1} falló: Página HTML sin token de confirmación")
-                                continue
-                        else:
-                            st.warning(f"⚠️ Método {i+1} falló: Respuesta HTML inesperada")
-                            continue
-                    
-                    # Descargar el archivo
+                # Verificar si no es HTML
+                if 'text/html' not in content_type:
                     total_size = int(response.headers.get('content-length', 0))
                     downloaded = 0
                     
-                    # Crear barra de progreso
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     
@@ -308,50 +307,33 @@ def download_file_from_google_drive(file_id, destination):
                                 f.write(chunk)
                                 downloaded += len(chunk)
                                 
-                                # Actualizar progreso
                                 if total_size > 0:
                                     progress = downloaded / total_size
                                     progress_bar.progress(progress)
                                     status_text.text(f"📥 Descargado: {downloaded:,} / {total_size:,} bytes ({progress*100:.1f}%)")
-                                else:
-                                    status_text.text(f"📥 Descargado: {downloaded:,} bytes")
                     
-                    # Limpiar elementos de progreso
                     progress_bar.empty()
                     status_text.empty()
                     
-                    # Verificar que el archivo se descargó correctamente
-                    if os.path.exists(destination) and os.path.getsize(destination) > 1000:  # Al menos 1KB
+                    if os.path.exists(destination) and os.path.getsize(destination) > 1000:
                         file_size = os.path.getsize(destination)
-                        st.success(f"✅ Descarga exitosa: {file_size:,} bytes")
+                        st.success(f"✅ Descarga exitosa con requests: {file_size:,} bytes")
                         return True
-                    else:
-                        st.warning(f"⚠️ Método {i+1} falló: Archivo muy pequeño o vacío")
-                        if os.path.exists(destination):
-                            os.remove(destination)
-                        continue
-                        
-                else:
-                    st.warning(f"⚠️ Método {i+1} falló: HTTP {response.status_code}")
-                    continue
-                    
-        except requests.exceptions.Timeout:
-            st.warning(f"⚠️ Método {i+1} falló: Timeout")
-            continue
-        except requests.exceptions.RequestException as e:
-            st.warning(f"⚠️ Método {i+1} falló: {str(e)[:100]}")
-            continue
-        except Exception as e:
-            st.warning(f"⚠️ Método {i+1} falló: Error inesperado - {str(e)[:100]}")
-            continue
+                
+                st.warning("⚠️ Método 2 falló: Respuesta HTML recibida")
+            else:
+                st.warning(f"⚠️ Método 2 falló: HTTP {response.status_code}")
+                
+    except Exception as e:
+        st.warning(f"⚠️ Método 2 falló: {str(e)[:100]}")
     
-    # Si llegamos aquí, todos los métodos fallaron
+    # Si llegamos aquí, ambos métodos fallaron
     st.error("❌ Todos los métodos de descarga fallaron")
-    st.error("🔍 Verifica que:")
-    st.error("   • El archivo existe en Google Drive")
-    st.error("   • El archivo está configurado como público")
-    st.error("   • El file_id es correcto")
-    st.error("   • Tu conexión a internet funciona correctamente")
+    st.error("🔍 Posibles soluciones:")
+    st.error("   1. Verifica que el archivo esté configurado como público en Google Drive")
+    st.error("   2. Asegúrate de que el enlace sea: 'Cualquier persona con el enlace puede ver'")
+    st.error("   3. Intenta subir el archivo nuevamente a Google Drive")
+    st.error("   4. Verifica que el file_id sea correcto")
     
     return False
 
