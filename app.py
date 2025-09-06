@@ -239,28 +239,67 @@ def download_file_from_google_drive(file_id, destination):
         # URL para descargar archivos grandes de Google Drive
         url = f"https://drive.google.com/uc?export=download&id={file_id}"
         
+        # Crear el directorio si no existe
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        
         with requests.Session() as session:
-            response = session.get(url, stream=True)
+            # Configurar headers para evitar problemas de bot detection
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
             
-            # Manejar la confirmación de descarga para archivos grandes
-            for key, value in response.cookies.items():
-                if key.startswith('download_warning'):
-                    params = {'id': file_id, 'confirm': value}
-                    response = session.get(url, params=params, stream=True)
-                    break
+            # Primera solicitud
+            response = session.get(url, headers=headers, stream=True, timeout=30)
+            response.raise_for_status()
             
-            # Crear el directorio si no existe
-            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            # Verificar si necesita confirmación para archivos grandes
+            if 'download_warning' in response.cookies:
+                # Obtener el token de confirmación
+                for key, value in response.cookies.items():
+                    if key.startswith('download_warning'):
+                        confirm_url = f"https://drive.google.com/uc?export=download&confirm={value}&id={file_id}"
+                        response = session.get(confirm_url, headers=headers, stream=True, timeout=60)
+                        response.raise_for_status()
+                        break
+            
+            # Verificar que la respuesta contiene datos binarios (no HTML de error)
+            content_type = response.headers.get('content-type', '')
+            if 'text/html' in content_type:
+                st.error("Error: El archivo no está disponible públicamente o el enlace es incorrecto.")
+                st.info("Asegúrate de que el archivo en Google Drive esté configurado como 'Cualquier persona con el enlace puede ver'")
+                return False
             
             # Descargar el archivo
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            
             with open(destination, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=32768):
+                for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
+                        downloaded += len(chunk)
+                        
+                        # Mostrar progreso si conocemos el tamaño total
+                        if total_size > 0:
+                            progress = downloaded / total_size
+                            st.progress(progress)
             
-            return True
+            # Verificar que el archivo se descargó correctamente
+            if os.path.exists(destination) and os.path.getsize(destination) > 0:
+                st.success(f"Archivo descargado: {os.path.getsize(destination)} bytes")
+                return True
+            else:
+                st.error("El archivo descargado está vacío o corrupto")
+                return False
+                
+    except requests.exceptions.Timeout:
+        st.error("Timeout: La descarga tardó demasiado. Intenta nuevamente.")
+        return False
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error de conexión: {e}")
+        return False
     except Exception as e:
-        st.error(f"Error descargando el archivo: {e}")
+        st.error(f"Error inesperado descargando el archivo: {e}")
         return False
 
 def translate_food_name(english_name, lang):
@@ -295,29 +334,63 @@ def load_trained_model():
     try:
         # Verificar si el modelo existe localmente
         if not os.path.exists(model_path):
-            st.info("Modelo no encontrado localmente. Descargando desde Google Drive...")
+            st.info("🔄 Modelo no encontrado localmente. Descargando desde Google Drive...")
+            st.info(f"📁 Buscando archivo en: {model_path}")
             
             # Verificar si se ha configurado un file_id válido
-            if GOOGLE_DRIVE_FILE_ID == "TU_FILE_ID_AQUI":
-                st.error("Por favor, configura el GOOGLE_DRIVE_FILE_ID en el código con tu ID de Google Drive.")
-                st.info("Instrucciones: 1) Sube tu modelo a Google Drive, 2) Haz el archivo público, 3) Copia el file_id de la URL")
+            if GOOGLE_DRIVE_FILE_ID == "15r4gSGDtsynjyMvQ-3ezTjDe14g4J8Bg":
+                st.error("❌ Por favor, configura el GOOGLE_DRIVE_FILE_ID en el código con tu ID de Google Drive.")
+                st.info("📋 Instrucciones: 1) Sube tu modelo a Google Drive, 2) Haz el archivo público, 3) Copia el file_id de la URL")
                 return None
             
+            # Mostrar información del archivo que se va a descargar
+            st.info(f"🔗 Descargando desde Google Drive ID: {GOOGLE_DRIVE_FILE_ID}")
+            
             # Descargar el modelo desde Google Drive
-            with st.spinner("Descargando modelo desde Google Drive..."):
+            with st.spinner("⬇️ Descargando modelo desde Google Drive..."):
                 success = download_file_from_google_drive(GOOGLE_DRIVE_FILE_ID, model_path)
                 
             if not success:
-                st.error("Error al descargar el modelo desde Google Drive.")
+                st.error("❌ Error al descargar el modelo desde Google Drive.")
+                st.error("🔍 Verifica que:")
+                st.error("   • El archivo existe en Google Drive")
+                st.error("   • El archivo está configurado como público ('Cualquier persona con el enlace puede ver')")
+                st.error("   • El file_id es correcto")
                 return None
             
-            st.success("Modelo descargado exitosamente desde Google Drive!")
+            st.success("✅ Modelo descargado exitosamente desde Google Drive!")
+        else:
+            st.info("✅ Usando modelo local existente")
         
-        # Cargar el modelo
-        return load_model(model_path)
+        # Verificar que el archivo existe y tiene contenido antes de cargarlo
+        if not os.path.exists(model_path):
+            st.error(f"❌ El archivo del modelo no existe: {model_path}")
+            return None
+            
+        file_size = os.path.getsize(model_path)
+        if file_size == 0:
+            st.error("❌ El archivo del modelo está vacío")
+            return None
+            
+        st.info(f"📊 Cargando modelo ({file_size:,} bytes)...")
+        
+        # Cargar el modelo con manejo de errores específico
+        try:
+            model = load_model(model_path)
+            st.success("✅ Modelo cargado exitosamente!")
+            return model
+        except Exception as load_error:
+            st.error(f"❌ Error específico al cargar el modelo: {load_error}")
+            st.error("🔍 Posibles causas:")
+            st.error("   • El archivo está corrupto")
+            st.error("   • El archivo no es un modelo válido de Keras/TensorFlow")
+            st.error("   • Incompatibilidad de versiones")
+            return None
         
     except Exception as e:
-        st.error(f"Error cargando el modelo: {e}")
+        st.error(f"❌ Error inesperado: {e}")
+        import traceback
+        st.error(f"🔍 Detalles técnicos: {traceback.format_exc()}")
         return None
 
 model = load_trained_model()
