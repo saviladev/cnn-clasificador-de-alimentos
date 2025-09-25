@@ -225,63 +225,6 @@ def load_translations():
 
 translations_df = load_translations()
 
-def download_file_from_google_drive(file_id, destination):
-    """
-    Descarga un archivo desde Google Drive de forma silenciosa.
-    
-    Args:
-        file_id (str): ID del archivo en Google Drive
-        destination (str): Ruta donde guardar el archivo
-    
-    Returns:
-        bool: True si la descarga fue exitosa, False en caso contrario
-    """
-    # Crear el directorio si no existe
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
-    
-    # Método 1: Usar gdown (más confiable para Google Drive)
-    try:
-        url = f"https://drive.google.com/uc?id={file_id}"
-        success = gdown.download(url, destination, quiet=True)
-        
-        if success and os.path.exists(destination) and os.path.getsize(destination) > 1000:
-            return True
-        else:
-            if os.path.exists(destination):
-                os.remove(destination)
-    
-    except Exception:
-        if os.path.exists(destination):
-            os.remove(destination)
-    
-    # Método 2: Fallback con requests
-    try:
-        url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download"
-        
-        with requests.Session() as session:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
-            
-            response = session.get(url, headers=headers, stream=True, timeout=120, allow_redirects=True)
-            
-            if response.status_code == 200:
-                content_type = response.headers.get('content-type', '').lower()
-                
-                if 'text/html' not in content_type:
-                    with open(destination, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                    
-                    if os.path.exists(destination) and os.path.getsize(destination) > 1000:
-                        return True
-                
-    except Exception:
-        pass
-    
-    return False
-
 def translate_food_name(english_name, lang):
     col = {"es": "spanish", "en": "english", "fr": "french"}[lang]
     row = translations_df[translations_df["english"] == english_name]
@@ -304,47 +247,58 @@ def load_trained_model():
     model_path = "models/inceptionv3_food101.h5"
     GOOGLE_DRIVE_FILE_ID = "1ni94iMEqqcUG8IjcHykcDxNvcy49GOry"
     
+    # URL directa de descarga usando gdown
+    url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
+    
     # Intentar cargar el modelo local primero
     if os.path.exists(model_path):
         try:
-            with st.spinner("Cargando modelo local..."):
-                model = load_model(model_path)
-                st.success("✅ Modelo cargado exitosamente desde el almacenamiento local")
-                return model
+            # Verificar que el archivo no esté corrupto
+            file_size = os.path.getsize(model_path)
+            if file_size < 100 * 1024 * 1024:  # Menos de 100MB probablemente está corrupto
+                st.warning("⚠️ El archivo del modelo parece estar corrupto o incompleto. Volviendo a descargar...")
+                os.remove(model_path)
+            else:
+                with st.spinner("Cargando modelo local..."):
+                    model = load_model(model_path)
+                    st.success("✅ Modelo cargado exitosamente desde el almacenamiento local")
+                    return model
         except Exception as e:
             st.warning(f"⚠️ Error al cargar el modelo local: {str(e)}. Intentando descargar...")
-            os.remove(model_path)  # Eliminar archivo corrupto
+            if os.path.exists(model_path):
+                os.remove(model_path)
     
     # Si llegamos aquí, necesitamos descargar el modelo
-    with st.spinner("Descargando modelo desde Google Drive (esto puede tomar unos minutos)..."):
+    with st.spinner("Descargando modelo desde Google Drive (esto puede tomar varios minutos debido al tamaño del archivo)..."):
         try:
-            # Usar wget para descargar el archivo
-            url = f"https://drive.google.com/uc?export=download&id={GOOGLE_DRIVE_FILE_ID}"
-            response = requests.get(url, stream=True)
+            # Usar gdown para descargar el archivo
+            output = model_path
+            gdown.download(url, output, quiet=False)
             
-            # Verificar si la descarga fue exitosa
-            if response.status_code == 200:
-                # Guardar el archivo en bloques
-                with open(model_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                
-                # Verificar que el archivo se descargó correctamente
-                if os.path.exists(model_path) and os.path.getsize(model_path) > 0:
-                    model = load_model(model_path)
-                    st.success("✅ Modelo descargado y cargado exitosamente")
-                    return model
+            # Verificar que el archivo se descargó correctamente
+            if os.path.exists(model_path):
+                file_size = os.path.getsize(model_path)
+                if file_size > 100 * 1024 * 1024:  # Verificar que el archivo tenga un tamaño razonable
+                    try:
+                        model = load_model(model_path)
+                        st.success(f"✅ Modelo descargado y cargado exitosamente ({file_size/1024/1024:.2f} MB)")
+                        return model
+                    except Exception as e:
+                        st.error(f"❌ Error al cargar el modelo descargado: {str(e)}")
+                        os.remove(model_path)
                 else:
-                    st.error("❌ El archivo del modelo se descargó pero está vacío o corrupto")
+                    st.error(f"❌ El archivo descargado es demasiado pequeño ({file_size/1024/1024:.2f} MB), probablemente la descarga falló")
+                    if os.path.exists(model_path):
+                        os.remove(model_path)
             else:
-                st.error(f"❌ Error al descargar el modelo. Código de estado: {response.status_code}")
+                st.error("❌ No se pudo descargar el archivo. Verifica tu conexión a internet.")
                 
         except Exception as e:
             st.error(f"❌ Error al descargar el modelo: {str(e)}")
             if os.path.exists(model_path):
                 os.remove(model_path)
     
+    st.error("❌ No se pudo cargar el modelo. Por favor, recarga la página para intentar nuevamente.")
     return None
 
 model = load_trained_model()
