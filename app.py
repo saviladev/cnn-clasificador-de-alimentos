@@ -220,7 +220,7 @@ def load_trained_model():
         gdown_id(GD_H5_ID, h5_path)
 
     if file_exists_and_big(h5_path, min_mb=5):
-        if not is_valid_h5(h5_path)):
+        if not is_valid_h5(h5_path):
             st.error("El .h5 descargado NO es un HDF5 válido (Drive devolvió HTML). "
                      "Asegura enlace público e ID correcto.")
             return None
