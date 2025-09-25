@@ -251,28 +251,43 @@ def load_trained_model():
         MODEL_H5 = f"{MODEL_DIR}.h5"
         GOOGLE_DRIVE_FILE_ID = "1aopQMrls2c4eRfhCCk2csrNm-ftcth3i"
         
+        # Mostrar información de depuración
+        st.info(f"Buscando modelo en: {os.path.abspath(MODEL_H5)}")
+        
         # Verificar si ya tenemos el modelo en formato .h5 o saved_model
         if os.path.exists(MODEL_H5) or os.path.exists(MODEL_DIR):
             try:
                 # Verificar si es un archivo .h5
                 if os.path.exists(MODEL_H5):
                     file_size = os.path.getsize(MODEL_H5)
+                    st.info(f"Archivo .h5 encontrado. Tamaño: {file_size/1024/1024:.2f} MB")
+                    
                     if file_size < 100 * 1024 * 1024:  # Menos de 100MB probablemente está corrupto
-                        st.warning("⚠️ El archivo del modelo parece estar corrupto o incompleto. Volviendo a descargar...")
+                        st.warning(f"⚠️ El archivo del modelo parece estar corrupto o incompleto ({file_size/1024/1024:.2f} MB). Volviendo a descargar...")
                         os.remove(MODEL_H5)
                     else:
                         with st.spinner("Cargando modelo local (formato .h5)..."):
-                            model = load_model(MODEL_H5)
-                            st.success("✅ Modelo cargado exitosamente desde archivo .h5 local")
-                            return model
+                            try:
+                                model = load_model(MODEL_H5)
+                                st.success("✅ Modelo cargado exitosamente desde archivo .h5 local")
+                                return model
+                            except Exception as e:
+                                st.error(f"Error al cargar el archivo .h5: {str(e)}")
+                                os.remove(MODEL_H5)  # Eliminar archivo corrupto
                 
                 # Verificar si es un saved_model
                 if os.path.exists(MODEL_DIR):
+                    st.info("Buscando modelo en formato saved_model...")
                     with st.spinner("Cargando modelo local (formato saved_model)..."):
-                        model = tf.keras.models.load_model(MODEL_DIR)
-                        st.success("✅ Modelo cargado exitosamente desde saved_model local")
-                        return model
-                        
+                        try:
+                            model = tf.keras.models.load_model(MODEL_DIR)
+                            st.success("✅ Modelo cargado exitosamente desde saved_model local")
+                            return model
+                        except Exception as e:
+                            st.error(f"Error al cargar saved_model: {str(e)}")
+                            import shutil
+                            shutil.rmtree(MODEL_DIR)
+                            
             except Exception as e:
                 st.warning(f"⚠️ Error al cargar el modelo local: {str(e)}. Intentando descargar...")
                 # Limpiar archivos corruptos
