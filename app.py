@@ -240,66 +240,110 @@ def translate_food_name(english_name, lang):
 def load_trained_model():
     """
     Carga el modelo entrenado. Si no existe localmente, lo descarga desde Google Drive.
+    Soporta tanto archivos .h5 como saved_model.
     """
-    # Crear directorio de modelos si no existe
-    os.makedirs("models", exist_ok=True)
-    
-    model_path = "models/inceptionv3_food101.h5"
-    GOOGLE_DRIVE_FILE_ID = "1ni94iMEqqcUG8IjcHykcDxNvcy49GOry"
-    
-    # URL directa de descarga usando gdown
-    url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
-    
-    # Intentar cargar el modelo local primero
-    if os.path.exists(model_path):
-        try:
-            # Verificar que el archivo no esté corrupto
-            file_size = os.path.getsize(model_path)
-            if file_size < 100 * 1024 * 1024:  # Menos de 100MB probablemente está corrupto
-                st.warning("⚠️ El archivo del modelo parece estar corrupto o incompleto. Volviendo a descargar...")
-                os.remove(model_path)
-            else:
-                with st.spinner("Cargando modelo local..."):
-                    model = load_model(model_path)
-                    st.success("✅ Modelo cargado exitosamente desde el almacenamiento local")
-                    return model
-        except Exception as e:
-            st.warning(f"⚠️ Error al cargar el modelo local: {str(e)}. Intentando descargar...")
-            if os.path.exists(model_path):
-                os.remove(model_path)
-    
-    # Si llegamos aquí, necesitamos descargar el modelo
-    with st.spinner("Descargando modelo desde Google Drive (esto puede tomar varios minutos debido al tamaño del archivo)..."):
-        try:
-            # Usar gdown para descargar el archivo
-            output = model_path
-            gdown.download(url, output, quiet=False)
-            
-            # Verificar que el archivo se descargó correctamente
-            if os.path.exists(model_path):
-                file_size = os.path.getsize(model_path)
-                if file_size > 100 * 1024 * 1024:  # Verificar que el archivo tenga un tamaño razonable
-                    try:
-                        model = load_model(model_path)
-                        st.success(f"✅ Modelo descargado y cargado exitosamente ({file_size/1024/1024:.2f} MB)")
-                        return model
-                    except Exception as e:
-                        st.error(f"❌ Error al cargar el modelo descargado: {str(e)}")
-                        os.remove(model_path)
-                else:
-                    st.error(f"❌ El archivo descargado es demasiado pequeño ({file_size/1024/1024:.2f} MB), probablemente la descarga falló")
-                    if os.path.exists(model_path):
-                        os.remove(model_path)
-            else:
-                st.error("❌ No se pudo descargar el archivo. Verifica tu conexión a internet.")
+    try:
+        # Crear directorio de modelos si no existe
+        os.makedirs("models", exist_ok=True)
+        
+        # Configuración del modelo
+        MODEL_DIR = "models/inceptionv3_food101"
+        MODEL_H5 = f"{MODEL_DIR}.h5"
+        GOOGLE_DRIVE_FILE_ID = "1aopQMrls2c4eRfhCCk2csrNm-ftcth3i"
+        
+        # Verificar si ya tenemos el modelo en formato .h5 o saved_model
+        if os.path.exists(MODEL_H5) or os.path.exists(MODEL_DIR):
+            try:
+                # Verificar si es un archivo .h5
+                if os.path.exists(MODEL_H5):
+                    file_size = os.path.getsize(MODEL_H5)
+                    if file_size < 100 * 1024 * 1024:  # Menos de 100MB probablemente está corrupto
+                        st.warning("⚠️ El archivo del modelo parece estar corrupto o incompleto. Volviendo a descargar...")
+                        os.remove(MODEL_H5)
+                    else:
+                        with st.spinner("Cargando modelo local (formato .h5)..."):
+                            model = load_model(MODEL_H5)
+                            st.success("✅ Modelo cargado exitosamente desde archivo .h5 local")
+                            return model
                 
-        except Exception as e:
-            st.error(f"❌ Error al descargar el modelo: {str(e)}")
-            if os.path.exists(model_path):
-                os.remove(model_path)
-    
-    st.error("❌ No se pudo cargar el modelo. Por favor, recarga la página para intentar nuevamente.")
-    return None
+                # Verificar si es un saved_model
+                if os.path.exists(MODEL_DIR):
+                    with st.spinner("Cargando modelo local (formato saved_model)..."):
+                        model = tf.keras.models.load_model(MODEL_DIR)
+                        st.success("✅ Modelo cargado exitosamente desde saved_model local")
+                        return model
+                        
+            except Exception as e:
+                st.warning(f"⚠️ Error al cargar el modelo local: {str(e)}. Intentando descargar...")
+                # Limpiar archivos corruptos
+                if os.path.exists(MODEL_H5):
+                    os.remove(MODEL_H5)
+                if os.path.exists(MODEL_DIR):
+                    import shutil
+                    shutil.rmtree(MODEL_DIR)
+        
+        # Si llegamos aquí, necesitamos descargar el modelo
+        with st.spinner("Descargando modelo desde Google Drive (esto puede tomar varios minutos)..."):
+            try:
+                # Primero intentamos descargar como .h5
+                temp_file = "temp_model.h5"
+                url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
+                
+                # Configurar SSL para evitar problemas de certificado
+                import ssl
+                ssl._create_default_https_context = ssl._create_unverified_context
+                
+                st.info("Descargando modelo (puede tardar varios minutos)...")
+                
+                # Usar gdown para descargar
+                import gdown
+                gdown.download(url, temp_file, quiet=False)
+                
+                # Verificar que el archivo se descargó correctamente
+                if os.path.exists(temp_file):
+                    file_size = os.path.getsize(temp_file)
+                    st.info(f"Tamaño del archivo descargado: {file_size/1024/1024:.2f} MB")
+                    
+                    if file_size > 100 * 1024 * 1024:  # Verificar tamaño razonable
+                        try:
+                            # Intentar cargar como .h5
+                            model = load_model(temp_file)
+                            # Si llegamos aquí, es un .h5 válido
+                            os.rename(temp_file, MODEL_H5)
+                            st.success(f"✅ Modelo .h5 descargado y cargado exitosamente ({file_size/1024/1024:.2f} MB)")
+                            return model
+                        except Exception as e:
+                            st.warning(f"No es un archivo .h5 válido. Intentando como saved_model...")
+                            # Podría ser un saved_model comprimido
+                            try:
+                                import zipfile
+                                with zipfile.ZipFile(temp_file, 'r') as zip_ref:
+                                    zip_ref.extractall(MODEL_DIR)
+                                # Verificar si se extrajo correctamente
+                                if os.path.exists(os.path.join(MODEL_DIR, 'saved_model.pb')):
+                                    model = tf.keras.models.load_model(MODEL_DIR)
+                                    st.success(f"✅ Modelo saved_model descargado y cargado exitosamente")
+                                    return model
+                                else:
+                                    st.error("❌ El archivo descargado no es un modelo válido")
+                            except Exception as e2:
+                                st.error(f"❌ No se pudo cargar el archivo: {str(e2)}")
+                    else:
+                        st.error(f"❌ El archivo descargado es demasiado pequeño ({file_size/1024/1024:.2f} MB)")
+                    
+                    # Limpiar archivo temporal
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                
+            except Exception as e:
+                st.error(f"❌ Error al descargar el modelo: {str(e)}")
+        
+        st.error("❌ No se pudo cargar el modelo. Por favor, verifica que el archivo en Google Drive sea un modelo válido (.h5 o saved_model).")
+        return None
+        
+    except Exception as e:
+        st.error(f"❌ Error inesperado: {str(e)}")
+        return None
 
 model = load_trained_model()
 
