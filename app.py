@@ -246,7 +246,7 @@ if model is None:
 uploaded_file = st.file_uploader(t("upload_prompt"), type=["jpg","jpeg","png"])
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
-    st.image(image, caption=t("upload_prompt"), use_container_width=True)
+    st.image(image, caption=t("upload_prompt"), use_column_width=True)
 
     with st.spinner(t("analyzing")):
         t0 = time.time()
