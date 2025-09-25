@@ -256,15 +256,13 @@ def load_trained_model():
                 if file_size > 50 * 1024 * 1024:  # Al menos 50MB
                     st.info(f"Cargando modelo existente ({file_size/1024/1024:.1f} MB)...")
                     
-                    # Configurar opciones de carga para evitar errores de compatibilidad
-                    custom_objects = {}
-                    
-                    # Intentar cargar el modelo con diferentes configuraciones
+                    # Configurar opciones de carga para TensorFlow 2.20+ con Keras 3.x
                     try:
+                        # Intentar cargar con configuración moderna
                         model = tf.keras.models.load_model(
                             MODEL_PATH, 
-                            custom_objects=custom_objects,
-                            compile=False
+                            compile=False,
+                            safe_mode=False  # Para compatibilidad con modelos antiguos
                         )
                         
                         # Recompilar el modelo con configuración básica
@@ -360,12 +358,10 @@ def load_trained_model():
         try:
             st.info("Cargando modelo en memoria...")
             
-            # Configurar TensorFlow para mayor compatibilidad
-            tf.config.run_functions_eagerly(False)
-            
             model = tf.keras.models.load_model(
                 MODEL_PATH,
-                compile=False  # No compilar automáticamente
+                compile=False,  # No compilar automáticamente
+                safe_mode=False  # Para compatibilidad con modelos Keras 2.x en TF 2.20+
             )
             
             # Recompilar con configuración básica
