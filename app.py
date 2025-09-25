@@ -298,8 +298,8 @@ def load_trained_model():
     """
     Carga el modelo entrenado. Si no existe localmente, lo descarga desde Google Drive.
     """
-    model_path = "models/xception_food101.h5"
-    GOOGLE_DRIVE_FILE_ID = "15r4gSGDtsynjyMvQ-3ezTjDe14g4J8Bg"
+    model_path = "models/inceptionv3_food101.h5"
+    GOOGLE_DRIVE_FILE_ID = "1ni94iMEqqcUG8IjcHykcDxNvcy49GOry"
     
     try:
         # Verificar si el modelo existe localmente
