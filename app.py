@@ -293,33 +293,59 @@ def translate_food_name(english_name, lang):
         return row.iloc[0][col]
     return ' '.join(word.capitalize() for word in english_name.split('_'))
 
-@st.cache_resource
+@st.cache_resource(ttl=3600)  # Cache por 1 hora
 def load_trained_model():
     """
     Carga el modelo entrenado. Si no existe localmente, lo descarga desde Google Drive.
     """
+    # Crear directorio de modelos si no existe
+    os.makedirs("models", exist_ok=True)
+    
     model_path = "models/inceptionv3_food101.h5"
     GOOGLE_DRIVE_FILE_ID = "1ni94iMEqqcUG8IjcHykcDxNvcy49GOry"
     
-    try:
-        # Verificar si el modelo existe localmente
-        if not os.path.exists(model_path):
-            # Descargar el modelo desde Google Drive con un spinner simple
-            with st.spinner("Cargando modelo de IA..."):
-                success = download_file_from_google_drive(GOOGLE_DRIVE_FILE_ID, model_path)
+    # Intentar cargar el modelo local primero
+    if os.path.exists(model_path):
+        try:
+            with st.spinner("Cargando modelo local..."):
+                model = load_model(model_path)
+                st.success("✅ Modelo cargado exitosamente desde el almacenamiento local")
+                return model
+        except Exception as e:
+            st.warning(f"⚠️ Error al cargar el modelo local: {str(e)}. Intentando descargar...")
+            os.remove(model_path)  # Eliminar archivo corrupto
+    
+    # Si llegamos aquí, necesitamos descargar el modelo
+    with st.spinner("Descargando modelo desde Google Drive (esto puede tomar unos minutos)..."):
+        try:
+            # Usar wget para descargar el archivo
+            url = f"https://drive.google.com/uc?export=download&id={GOOGLE_DRIVE_FILE_ID}"
+            response = requests.get(url, stream=True)
+            
+            # Verificar si la descarga fue exitosa
+            if response.status_code == 200:
+                # Guardar el archivo en bloques
+                with open(model_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
                 
-            if not success:
-                st.error("❌ Error al cargar el modelo. Verifica tu conexión a internet e intenta nuevamente.")
-                return None
-        
-        # Cargar el modelo
-        with st.spinner("Inicializando modelo..."):
-            model = load_model(model_path)
-            return model
-        
-    except Exception as e:
-        st.error("❌ Error al cargar el modelo. Por favor, recarga la página.")
-        return None
+                # Verificar que el archivo se descargó correctamente
+                if os.path.exists(model_path) and os.path.getsize(model_path) > 0:
+                    model = load_model(model_path)
+                    st.success("✅ Modelo descargado y cargado exitosamente")
+                    return model
+                else:
+                    st.error("❌ El archivo del modelo se descargó pero está vacío o corrupto")
+            else:
+                st.error(f"❌ Error al descargar el modelo. Código de estado: {response.status_code}")
+                
+        except Exception as e:
+            st.error(f"❌ Error al descargar el modelo: {str(e)}")
+            if os.path.exists(model_path):
+                os.remove(model_path)
+    
+    return None
 
 model = load_trained_model()
 
