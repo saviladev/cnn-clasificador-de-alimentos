@@ -291,37 +291,59 @@ def load_trained_model():
         status_text = st.empty()
         
         try:
-            # URL directa de descarga
-            url = f'https://drive.google.com/uc?export=download&id={GOOGLE_DRIVE_FILE_ID}'
+            # Usar gdown directamente que maneja mejor Google Drive
+            st.info("Descargando con gdown...")
             
-            # Descargar con requests para mejor control
-            response = requests.get(url, stream=True)
+            # URL de Google Drive con gdown
+            url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
             
-            if response.status_code == 200:
-                total_size = int(response.headers.get('content-length', 0))
+            # Descargar usando gdown con fuzzy matching
+            output = gdown.download(url, MODEL_PATH, quiet=False, fuzzy=True)
+            
+            # Verificar si gdown devolvió None (error)
+            if output is None:
+                st.error("❌ Error en la descarga con gdown")
                 
-                with open(MODEL_PATH, 'wb') as f:
-                    downloaded = 0
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            if total_size > 0:
-                                progress = downloaded / total_size
-                                progress_bar.progress(progress)
-                                status_text.text(f"Descargado: {downloaded/1024/1024:.1f} MB / {total_size/1024/1024:.1f} MB")
+                # Intentar descarga manual con requests y sesión
+                st.info("Intentando descarga manual...")
+                session = requests.Session()
                 
-                progress_bar.progress(1.0)
-                status_text.text("Descarga completada")
+                # Primera petición para obtener el token de confirmación
+                response = session.get(url, stream=True)
+                token = None
                 
-            else:
-                # Fallback con gdown
-                st.info("Intentando descarga alternativa con gdown...")
-                gdown.download(
-                    f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}',
-                    MODEL_PATH,
-                    quiet=False
-                )
+                # Buscar token de confirmación en la respuesta
+                for key, value in response.cookies.items():
+                    if key.startswith('download_warning'):
+                        token = value
+                        break
+                
+                # Si hay token, hacer segunda petición con confirmación
+                if token:
+                    params = {'id': GOOGLE_DRIVE_FILE_ID, 'confirm': token}
+                    response = session.get('https://drive.google.com/uc', params=params, stream=True)
+                else:
+                    response = session.get(url, stream=True)
+                
+                # Descargar el contenido
+                if response.status_code == 200:
+                    total_size = int(response.headers.get('content-length', 0))
+                    with open(MODEL_PATH, 'wb') as f:
+                        downloaded = 0
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if total_size > 0:
+                                    progress = downloaded / total_size
+                                    progress_bar.progress(progress)
+                                    status_text.text(f"Descargado: {downloaded/1024/1024:.1f} MB")
+                    
+                    progress_bar.progress(1.0)
+                    status_text.text("Descarga manual completada")
+                else:
+                    st.error(f"❌ Error HTTP: {response.status_code}")
+                    return None
         
         except Exception as e:
             st.error(f"Error en descarga: {str(e)}")
