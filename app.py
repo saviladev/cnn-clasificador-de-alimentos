@@ -243,7 +243,7 @@ if model is None:
     st.stop()
 
 # =============== UI principal ===============
-uploaded_file = st.file_uploader(t("upload_prompt"), type=["jpg","jpeg","png"])
+uploaded_file = st.file_uploader(t("upload_prompt"), type=["jpg", "jpeg", "png"])
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
     st.image(image, caption=t("upload_prompt"), use_column_width=True)
@@ -252,11 +252,45 @@ if uploaded_file is not None:
         t0 = time.time()
         x = preprocess_image_inception(image)
         y = model.predict(x, verbose=0)
-        cls_idx = int(np.argmax(y)); conf = float(np.max(y)); dt = time.time() - t0
+
+        # --- Normalizar la salida a un numpy array [batch, num_classes] ---
+        def _to_numpy_preds(y_out):
+            # Si es un dict (común con TFSMLayer), toma el primer valor.
+            if isinstance(y_out, dict):
+                # st.write("Salidas del modelo:", list(y_out.keys()))  # <- útil para depurar
+                y_out = next(iter(y_out.values()))
+            # Si es lista/tupla, toma el primer elemento.
+            if isinstance(y_out, (list, tuple)):
+                y_out = y_out[0]
+            # Si es tensor, pásalo a numpy.
+            if tf.is_tensor(y_out):
+                y_out = y_out.numpy()
+            # Asegura numpy array
+            y_out = np.array(y_out)
+            # Forzar dimensión batch si viniera [num_classes]
+            if y_out.ndim == 1:
+                y_out = y_out[None, ...]
+            return y_out
+
+        preds_raw = _to_numpy_preds(y)
+
+        # Probabilidades (si parece clasificación multiclase)
+        if preds_raw.shape[-1] > 1:
+            probs = tf.nn.softmax(preds_raw, axis=-1).numpy()
+            cls_idx = int(np.argmax(probs, axis=-1)[0])
+            conf = float(probs[0, cls_idx])
+        else:
+            # Binario / regresión: usar valor tal cual
+            cls_idx = int(np.argmax(preds_raw, axis=-1)[0])
+            v = preds_raw.reshape(-1)[0]
+            conf = float(v if np.isscalar(v) else np.array(v).item())
+
+        dt = time.time() - t0
 
     class_names = nutrients_df["clase"].tolist()
     if cls_idx >= len(class_names):
-        st.error(t("error_class_index")); st.stop()
+        st.error(t("error_class_index"))
+        st.stop()
 
     predicted_food = class_names[cls_idx]
     row = nutrients_df[nutrients_df["clase"] == predicted_food]
@@ -268,31 +302,37 @@ if uploaded_file is not None:
 
         food_name = translate_food_name(predicted_food, lang)
         st.success(t("identified_food", food=food_name))
-        st.caption(t("model_confidence", confidence=conf*100))
+        st.caption(t("model_confidence", confidence=conf * 100))
         st.info(t("analysis_time", time=dt))
 
         weight = st.number_input(t("weight_prompt"), min_value=1.0, value=100.0, step=1.0)
-        f = weight/100.0
+        f = weight / 100.0
 
         st.markdown(t("nutritional_values"))
         st.markdown(f"""
-- {t('proteins', value=protein*f)}
-- {t('fats', value=fat*f)}
-- {t('carbs', value=carbs*f)}
-- {t('calories', value=kcal*f)}
+- {t('proteins', value=protein * f)}
+- {t('fats', value=fat * f)}
+- {t('carbs', value=carbs * f)}
+- {t('calories', value=kcal * f)}
 """)
 
         if st.button(t("generate_pdf")):
             with st.spinner(t("generate_pdf")):
                 pdf_bytes = generate_pdf_report(
-                    image=image, predicted_food=food_name,
-                    protein=protein*f, fat=fat*f, carbs=carbs*f, kcal=kcal*f,
-                    weight=weight, confidence=conf, processing_time=dt
+                    image=image,
+                    predicted_food=food_name,
+                    protein=protein * f,
+                    fat=fat * f,
+                    carbs=carbs * f,
+                    kcal=kcal * f,
+                    weight=weight,
+                    confidence=conf,
+                    processing_time=dt
                 )
             st.download_button(
                 label=t("download_pdf"),
                 data=pdf_bytes,
-                file_name=f"reporte_nutricional_{predicted_food.lower().replace(' ','_')}.pdf",
+                file_name=f"reporte_nutricional_{predicted_food.lower().replace(' ', '_')}.pdf",
                 mime="application/pdf"
             )
             st.success(t("pdf_success"))
