@@ -301,8 +301,11 @@ def load_trained_model():
         with st.spinner("Descargando modelo desde Google Drive (esto puede tomar varios minutos)..."):
             try:
                 # Primero intentamos descargar como .h5
-                temp_file = "temp_model.h5"
+                temp_file = os.path.join("models", "temp_model.h5")
                 url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
+                
+                # Asegurarse de que el directorio existe
+                os.makedirs(os.path.dirname(temp_file), exist_ok=True)
                 
                 # Configurar SSL para evitar problemas de certificado
                 import ssl
@@ -310,9 +313,14 @@ def load_trained_model():
                 
                 st.info("Descargando modelo (puede tardar varios minutos)...")
                 
-                # Usar gdown para descargar
+                # Usar gdown para descargar con más información de depuración
                 import gdown
-                gdown.download(url, temp_file, quiet=False)
+                st.info(f"URL de descarga: {url}")
+                st.info(f"Guardando en: {os.path.abspath(temp_file)}")
+                
+                # Descargar con verificación
+                output = gdown.download(url, temp_file, quiet=False, fuzzy=True)
+                st.info(f"Resultado de la descarga: {output}")
                 
                 # Verificar que el archivo se descargó correctamente
                 if os.path.exists(temp_file):
@@ -322,38 +330,85 @@ def load_trained_model():
                     if file_size > 100 * 1024 * 1024:  # Verificar tamaño razonable
                         try:
                             # Intentar cargar como .h5
-                            model = load_model(temp_file)
-                            # Si llegamos aquí, es un .h5 válido
-                            os.rename(temp_file, MODEL_H5)
-                            st.success(f"✅ Modelo .h5 descargado y cargado exitosamente ({file_size/1024/1024:.2f} MB)")
-                            return model
+                            st.info("Intentando cargar como archivo .h5...")
+                            try:
+                                # Primero verificar si es un archivo .h5 válido
+                                import h5py
+                                with h5py.File(temp_file, 'r') as f:
+                                    st.info("Estructura del archivo .h5:")
+                                    for key in f.keys():
+                                        st.info(f"- {key}: {f[key]}")
+                                
+                                # Si llegamos aquí, el archivo parece ser un HDF5 válido
+                                st.info("El archivo parece ser un HDF5 válido. Cargando modelo...")
+                                model = load_model(temp_file)
+                                
+                                # Si llegamos aquí, la carga fue exitosa
+                                os.rename(temp_file, MODEL_H5)
+                                st.success(f"✅ Modelo .h5 cargado exitosamente ({file_size/1024/1024:.2f} MB)")
+                                return model
+                                
+                            except Exception as load_error:
+                                st.error(f"❌ Error al cargar el modelo .h5: {str(load_error)}")
+                                # Intentar cargar con tensorflow directamente
+                                st.info("Intentando cargar con tensorflow.keras.models.load_model...")
+                                try:
+                                    model = tf.keras.models.load_model(temp_file)
+                                    os.rename(temp_file, MODEL_H5)
+                                    st.success(f"✅ Modelo cargado exitosamente con tensorflow.keras ({file_size/1024/1024:.2f} MB)")
+                                    return model
+                                except Exception as tf_error:
+                                    st.error(f"❌ Error con tensorflow.keras: {str(tf_error)}")
+                                    raise load_error  # Relanzar el error original
                         except Exception as e:
-                            st.warning(f"No es un archivo .h5 válido. Intentando como saved_model...")
+                            st.warning(f"No es un archivo .h5 válido: {str(e)}. Intentando como saved_model...")
                             # Podría ser un saved_model comprimido
                             try:
                                 import zipfile
+                                st.info("Intentando extraer como archivo ZIP...")
                                 with zipfile.ZipFile(temp_file, 'r') as zip_ref:
                                     zip_ref.extractall(MODEL_DIR)
                                 # Verificar si se extrajo correctamente
                                 if os.path.exists(os.path.join(MODEL_DIR, 'saved_model.pb')):
+                                    st.info("Archivo saved_model.pb encontrado, cargando modelo...")
                                     model = tf.keras.models.load_model(MODEL_DIR)
                                     st.success(f"✅ Modelo saved_model descargado y cargado exitosamente")
                                     return model
                                 else:
-                                    st.error("❌ El archivo descargado no es un modelo válido")
+                                    st.error("❌ El archivo ZIP no contiene un modelo válido (no se encontró saved_model.pb)")
                             except Exception as e2:
-                                st.error(f"❌ No se pudo cargar el archivo: {str(e2)}")
+                                st.error(f"❌ No se pudo extraer ni cargar el archivo: {str(e2)}")
                     else:
-                        st.error(f"❌ El archivo descargado es demasiado pequeño ({file_size/1024/1024:.2f} MB)")
+                        st.error(f"❌ El archivo descargado es demasiado pequeño ({file_size/1024/1024:.2f} MB). Debería ser mayor a 100MB.")
+                    
+                    # Mostrar contenido del directorio temporal para depuración
+                    st.info("Contenido del directorio temporal:")
+                    for f in os.listdir("models"):
+                        try:
+                            size = os.path.getsize(os.path.join("models", f))
+                            st.info(f"- {f} ({size/1024/1024:.2f} MB)")
+                        except:
+                            st.info(f"- {f} (error al obtener tamaño)")
                     
                     # Limpiar archivo temporal
                     if os.path.exists(temp_file):
                         os.remove(temp_file)
+                else:
+                    st.error("❌ No se pudo descargar el archivo. Verifica que el ID de Google Drive sea correcto.")
                 
             except Exception as e:
                 st.error(f"❌ Error al descargar el modelo: {str(e)}")
+                import traceback
+                st.error(f"Detalles del error: {traceback.format_exc()}")
         
-        st.error("❌ No se pudo cargar el modelo. Por favor, verifica que el archivo en Google Drive sea un modelo válido (.h5 o saved_model).")
+        # Mostrar información adicional de ayuda
+        st.error("""
+        ❌ No se pudo cargar el modelo. Por favor verifica:
+        1. Que el archivo en Google Drive sea público (cualquiera con el enlace puede verlo)
+        2. Que el ID del archivo sea correcto
+        3. Que el archivo sea un modelo .h5 o saved_model.zip válido
+        4. Que tengas suficiente espacio en disco
+        """)
         return None
         
     except Exception as e:
