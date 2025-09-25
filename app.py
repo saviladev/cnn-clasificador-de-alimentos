@@ -8,6 +8,7 @@ import tensorflow as tf
 from tensorflow.keras.applications.inception_v3 import preprocess_input
 from fpdf import FPDF
 import gdown
+from keras.layers import TFSMLayer  # para cargar SavedModel en Keras 3
 
 # =============== Config de página (debe ir primero) ===============
 st.set_page_config(page_title="Food Analyzer", page_icon="🍽️", layout="centered")
@@ -46,6 +47,9 @@ def is_valid_h5(path):
             return True
     except Exception:
         return False
+
+def file_exists_and_big(path, min_mb=5):
+    return os.path.exists(path) and (os.path.getsize(path) >= min_mb * 1024 * 1024)
 
 # =============== PDF ===============
 def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight, confidence=None, processing_time=None):
@@ -139,7 +143,7 @@ nutrients_df = load_nutrient_data()
 def load_trained_model():
     models_dir = "models"; os.makedirs(models_dir, exist_ok=True)
 
-    # IDs de Google Drive (los que pasaste)
+    # IDs de Google Drive (tuyos)
     GD_SAVEDMODEL_ZIP_ID = "1ni94iMEqqcUG8IjcHykcDxNvcy49GOry"
     GD_KERAS_ID          = "1DOw83yiiCBGyRlay7bn5mRGNyP8_WLnN"
     GD_H5_ID             = "1aopQMrls2c4eRfhCCk2csrNm-ftcth3i"
@@ -153,10 +157,7 @@ def load_trained_model():
         return gdown.download(url, output, quiet=False, fuzzy=True)
 
     def find_savedmodel_dir(root):
-        """
-        Busca recursivamente una carpeta que contenga 'saved_model.pb'.
-        Devuelve el primer path encontrado o None.
-        """
+        """Busca recursivamente una carpeta que contenga 'saved_model.pb'."""
         for current_root, dirs, files in os.walk(root):
             if "saved_model.pb" in files:
                 return current_root
@@ -167,32 +168,41 @@ def load_trained_model():
     if saved_dir is None:
         st.info("Descargando SavedModel (zip) desde Google Drive…")
         ok = gdown_id(GD_SAVEDMODEL_ZIP_ID, saved_zip)
-        if ok and os.path.exists(saved_zip):
+        if ok and file_exists_and_big(saved_zip, min_mb=5):
             try:
                 with zipfile.ZipFile(saved_zip, "r") as zf:
                     zf.extractall(models_dir)
             finally:
-                # limpia el zip aunque falle la carga luego
                 try: os.remove(saved_zip)
                 except: pass
             saved_dir = find_savedmodel_dir(models_dir)
+        else:
+            st.warning("La descarga del SavedModel falló o es muy pequeña. Intentaré con .keras/.h5")
 
     if saved_dir is not None:
         try:
-            st.info(f"Cargando SavedModel desde: {saved_dir}")
-            model = tf.keras.models.load_model(saved_dir, compile=False)
-            model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
-            st.success("✅ Modelo (SavedModel) cargado.")
-            return model
+            st.info(f"Cargando SavedModel con TFSMLayer desde: {saved_dir}")
+            # probamos endpoints comunes
+            for endpoint in ("serving_default", "predict", "serving", "__call__"):
+                try:
+                    tfsm = TFSMLayer(saved_dir, call_endpoint=endpoint)
+                    inp = tf.keras.Input(shape=(299, 299, 3), dtype=tf.float32)
+                    out = tfsm(inp)
+                    model = tf.keras.Model(inp, out)
+                    st.success(f"✅ SavedModel cargado (endpoint: {endpoint}).")
+                    return model
+                except Exception:
+                    continue
+            raise RuntimeError("No se encontró un endpoint de servicio válido en el SavedModel.")
         except Exception as e:
-            st.warning(f"No se pudo cargar SavedModel: {e}")
+            st.warning(f"No se pudo cargar SavedModel con TFSMLayer: {e}")
 
     # 2) Fallback: .keras
-    if not os.path.exists(keras_path):
+    if not file_exists_and_big(keras_path, min_mb=5):
         st.info("Descargando modelo .keras…")
         gdown_id(GD_KERAS_ID, keras_path)
 
-    if os.path.exists(keras_path):
+    if file_exists_and_big(keras_path, min_mb=5):
         try:
             st.info("Cargando .keras…")
             model = tf.keras.models.load_model(keras_path, compile=False, safe_mode=False)
@@ -201,21 +211,23 @@ def load_trained_model():
             return model
         except Exception as e:
             st.warning(f"No se pudo cargar .keras: {e}")
+    else:
+        st.warning("El archivo .keras no existe o es demasiado pequeño (posible HTML de Drive).")
 
     # 3) Último recurso: .h5
-    if not os.path.exists(h5_path):
+    if not file_exists_and_big(h5_path, min_mb=5):
         st.info("Descargando modelo .h5…")
         gdown_id(GD_H5_ID, h5_path)
 
-    if os.path.exists(h5_path):
-        if not is_valid_h5(h5_path):
+    if file_exists_and_big(h5_path, min_mb=5):
+        if not is_valid_h5(h5_path)):
             st.error("El .h5 descargado NO es un HDF5 válido (Drive devolvió HTML). "
                      "Asegura enlace público e ID correcto.")
             return None
         try:
             st.info("Cargando .h5…")
             model = tf.keras.models.load_model(h5_path, compile=False, safe_mode=False)
-            model.compile(optimizer="adam", loss="categorcategorical_crossentropy", metrics=["accuracy"])
+            model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
             st.success("✅ Modelo (.h5) cargado.")
             return model
         except Exception as e:
@@ -240,7 +252,7 @@ if uploaded_file is not None:
         t0 = time.time()
         x = preprocess_image_inception(image)
         y = model.predict(x, verbose=0)
-        cls_idx = int(np.argmax(y)); conf = float(np.max(y)); dt = time.time()-t0
+        cls_idx = int(np.argmax(y)); conf = float(np.max(y)); dt = time.time() - t0
 
     class_names = nutrients_df["clase"].tolist()
     if cls_idx >= len(class_names):
