@@ -141,9 +141,9 @@ def load_trained_model():
     models_dir = "models"; os.makedirs(models_dir, exist_ok=True)
 
     # TODO: Reemplaza con tus IDs reales
-    GD_SAVEDMODEL_ZIP_ID = "TU_ID_DE_DRIVE_DEL_ZIP"
-    GD_KERAS_ID         = "TU_ID_DE_DRIVE_DEL_DOT_KERAS"
-    GD_H5_ID            = "TU_ID_DE_DRIVE_DEL_DOT_H5"
+    GD_SAVEDMODEL_ZIP_ID    = "1ni94iMEqqcUG8IjcHykcDxNvcy49GOry"
+    GD_KERAS_ID             = "1DOw83yiiCBGyRlay7bn5mRGNyP8_WLnN"
+    GD_H5_ID                = "1aopQMrls2c4eRfhCCk2csrNm-ftcth3i"
 
     saved_zip   = os.path.join(models_dir, "inceptionv3_food101_savedmodel.zip")
     saved_dir   = os.path.join(models_dir, "inceptionv3_food101_savedmodel")
