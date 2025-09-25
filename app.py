@@ -329,37 +329,71 @@ def load_trained_model():
                     
                     if file_size > 100 * 1024 * 1024:  # Verificar tamaño razonable
                         try:
-                            # Intentar cargar como .h5
-                            st.info("Intentando cargar como archivo .h5...")
+                            # Intentar cargar como .h5 con diferentes métodos
+                            st.info("Analizando archivo .h5...")
                             try:
-                                # Primero verificar si es un archivo .h5 válido
+                                # 1. Primero verificar la estructura del archivo HDF5
                                 import h5py
                                 with h5py.File(temp_file, 'r') as f:
                                     st.info("Estructura del archivo .h5:")
                                     for key in f.keys():
                                         st.info(f"- {key}: {f[key]}")
                                 
-                                # Si llegamos aquí, el archivo parece ser un HDF5 válido
-                                st.info("El archivo parece ser un HDF5 válido. Cargando modelo...")
-                                model = load_model(temp_file)
+                                # 2. Intentar cargar con load_model de Keras
+                                st.info("\n1️⃣ Intentando cargar con keras.models.load_model...")
+                                try:
+                                    from keras.models import load_model as keras_load_model
+                                    model = keras_load_model(temp_file)
+                                    st.success("✅ ¡Modelo cargado exitosamente con keras.models.load_model!")
+                                    os.rename(temp_file, MODEL_H5)
+                                    return model
+                                except Exception as e1:
+                                    st.error(f"❌ Error con keras.models.load_model: {str(e1)}")
                                 
-                                # Si llegamos aquí, la carga fue exitosa
-                                os.rename(temp_file, MODEL_H5)
-                                st.success(f"✅ Modelo .h5 cargado exitosamente ({file_size/1024/1024:.2f} MB)")
-                                return model
-                                
-                            except Exception as load_error:
-                                st.error(f"❌ Error al cargar el modelo .h5: {str(load_error)}")
-                                # Intentar cargar con tensorflow directamente
-                                st.info("Intentando cargar con tensorflow.keras.models.load_model...")
+                                # 3. Intentar cargar con tensorflow.keras
+                                st.info("\n2️⃣ Intentando cargar con tensorflow.keras.models.load_model...")
                                 try:
                                     model = tf.keras.models.load_model(temp_file)
+                                    st.success("✅ ¡Modelo cargado exitosamente con tensorflow.keras!")
                                     os.rename(temp_file, MODEL_H5)
-                                    st.success(f"✅ Modelo cargado exitosamente con tensorflow.keras ({file_size/1024/1024:.2f} MB)")
                                     return model
-                                except Exception as tf_error:
-                                    st.error(f"❌ Error con tensorflow.keras: {str(tf_error)}")
-                                    raise load_error  # Relanzar el error original
+                                except Exception as e2:
+                                    st.error(f"❌ Error con tensorflow.keras: {str(e2)}")
+                                
+                                # 4. Intentar cargar solo los pesos
+                                st.info("\n3️⃣ Intentando cargar solo los pesos...")
+                                try:
+                                    # Crear un modelo temporal con la misma arquitectura
+                                    from keras.applications.inception_v3 import InceptionV3
+                                    from keras.layers import Dense, GlobalAveragePooling2D
+                                    from keras.models import Model
+                                    
+                                    base_model = InceptionV3(weights=None, include_top=False)
+                                    x = base_model.output
+                                    x = GlobalAveragePooling2D()(x)
+                                    predictions = Dense(101, activation='softmax')(x)
+                                    model = Model(inputs=base_model.input, outputs=predictions)
+                                    
+                                    # Cargar los pesos
+                                    model.load_weights(temp_file)
+                                    st.success("✅ ¡Pesos cargados exitosamente en un modelo InceptionV3!")
+                                    os.rename(temp_file, MODEL_H5)
+                                    return model
+                                except Exception as e3:
+                                    st.error(f"❌ Error al cargar los pesos: {str(e3)}")
+                                
+                                # 5. Si todo falla, mostrar información detallada del error
+                                st.error("\n🔍 No se pudo cargar el modelo con ninguno de los métodos intentados.")
+                                st.error("Posibles soluciones:")
+                                st.error("1. Verifica que el archivo no esté corrupto")
+                                st.error("2. Asegúrate de que las versiones de TensorFlow/Keras sean compatibles")
+                                st.error("3. Intenta volver a guardar el modelo con las mismas versiones")
+                                
+                                raise Exception("No se pudo cargar el modelo con ningún método disponible")
+                                
+                            except Exception as e:
+                                st.error(f"❌ Error inesperado: {str(e)}")
+                                raise
                         except Exception as e:
                             st.warning(f"No es un archivo .h5 válido: {str(e)}. Intentando como saved_model...")
                             # Podría ser un saved_model comprimido
