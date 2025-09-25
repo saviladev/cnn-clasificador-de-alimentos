@@ -2,7 +2,6 @@
 import os, time, zipfile
 import numpy as np
 import pandas as pd
-import requests
 import streamlit as st
 from PIL import Image
 import tensorflow as tf
@@ -140,13 +139,12 @@ nutrients_df = load_nutrient_data()
 def load_trained_model():
     models_dir = "models"; os.makedirs(models_dir, exist_ok=True)
 
-    # TODO: Reemplaza con tus IDs reales
-    GD_SAVEDMODEL_ZIP_ID    = "1ni94iMEqqcUG8IjcHykcDxNvcy49GOry"
-    GD_KERAS_ID             = "1DOw83yiiCBGyRlay7bn5mRGNyP8_WLnN"
-    GD_H5_ID                = "1aopQMrls2c4eRfhCCk2csrNm-ftcth3i"
+    # IDs de Google Drive (los que pasaste)
+    GD_SAVEDMODEL_ZIP_ID = "1ni94iMEqqcUG8IjcHykcDxNvcy49GOry"
+    GD_KERAS_ID          = "1DOw83yiiCBGyRlay7bn5mRGNyP8_WLnN"
+    GD_H5_ID             = "1aopQMrls2c4eRfhCCk2csrNm-ftcth3i"
 
     saved_zip   = os.path.join(models_dir, "inceptionv3_food101_savedmodel.zip")
-    saved_dir   = os.path.join(models_dir, "inceptionv3_food101_savedmodel")
     keras_path  = os.path.join(models_dir, "inceptionv3_food101.keras")
     h5_path     = os.path.join(models_dir, "inceptionv3_food101.h5")
 
@@ -154,18 +152,34 @@ def load_trained_model():
         url = f"https://drive.google.com/uc?id={file_id}"
         return gdown.download(url, output, quiet=False, fuzzy=True)
 
-    # 1) Preferir SavedModel (zip → carpeta)
-    if not os.path.isdir(saved_dir):
+    def find_savedmodel_dir(root):
+        """
+        Busca recursivamente una carpeta que contenga 'saved_model.pb'.
+        Devuelve el primer path encontrado o None.
+        """
+        for current_root, dirs, files in os.walk(root):
+            if "saved_model.pb" in files:
+                return current_root
+        return None
+
+    # 1) Preferir SavedModel (zip → carpeta). Descarga si no existe ya extraído.
+    saved_dir = find_savedmodel_dir(models_dir)
+    if saved_dir is None:
         st.info("Descargando SavedModel (zip) desde Google Drive…")
         ok = gdown_id(GD_SAVEDMODEL_ZIP_ID, saved_zip)
         if ok and os.path.exists(saved_zip):
-            with zipfile.ZipFile(saved_zip, "r") as zf:
-                zf.extractall(models_dir)
-            os.remove(saved_zip)
+            try:
+                with zipfile.ZipFile(saved_zip, "r") as zf:
+                    zf.extractall(models_dir)
+            finally:
+                # limpia el zip aunque falle la carga luego
+                try: os.remove(saved_zip)
+                except: pass
+            saved_dir = find_savedmodel_dir(models_dir)
 
-    if os.path.isdir(saved_dir):
+    if saved_dir is not None:
         try:
-            st.info("Cargando SavedModel…")
+            st.info(f"Cargando SavedModel desde: {saved_dir}")
             model = tf.keras.models.load_model(saved_dir, compile=False)
             model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
             st.success("✅ Modelo (SavedModel) cargado.")
@@ -174,7 +188,7 @@ def load_trained_model():
             st.warning(f"No se pudo cargar SavedModel: {e}")
 
     # 2) Fallback: .keras
-    if not os.path.exists(keras_path) and GD_KERAS_ID != "TU_ID_DE_DRIVE_DEL_DOT_KERAS":
+    if not os.path.exists(keras_path):
         st.info("Descargando modelo .keras…")
         gdown_id(GD_KERAS_ID, keras_path)
 
@@ -189,7 +203,7 @@ def load_trained_model():
             st.warning(f"No se pudo cargar .keras: {e}")
 
     # 3) Último recurso: .h5
-    if not os.path.exists(h5_path) and GD_H5_ID != "TU_ID_DE_DRIVE_DEL_DOT_H5":
+    if not os.path.exists(h5_path):
         st.info("Descargando modelo .h5…")
         gdown_id(GD_H5_ID, h5_path)
 
@@ -201,7 +215,7 @@ def load_trained_model():
         try:
             st.info("Cargando .h5…")
             model = tf.keras.models.load_model(h5_path, compile=False, safe_mode=False)
-            model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
+            model.compile(optimizer="adam", loss="categorcategorical_crossentropy", metrics=["accuracy"])
             st.success("✅ Modelo (.h5) cargado.")
             return model
         except Exception as e:
