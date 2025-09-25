@@ -38,7 +38,7 @@ def t(key, **kwargs):
         return f"[{key}]"
 
 # === RUTAS ===
-MODEL_PATH          = "models/inceptionv3_food101.h5"
+MODEL_PATH          = "models/xception_food101.h5"
 TRANSLATIONS_CSV    = "data/translations/food_translations.csv"
 NUTRIENTS_CSV       = "utils/food101_macronutrientes_completo.csv"
 FONT_NORMAL_PATH    = "fonts/DejaVuSans.ttf"
