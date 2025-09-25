@@ -1,8 +1,8 @@
 import streamlit as st
 import numpy as np
 import tensorflow as tf
-from keras.models import load_model
-from keras.applications.inception_v3 import preprocess_input
+from tensorflow.keras.models import load_model
+from tensorflow.keras.applications.inception_v3 import preprocess_input
 from PIL import Image
 import pandas as pd
 import time
@@ -236,223 +236,181 @@ def translate_food_name(english_name, lang):
         return row.iloc[0][col]
     return ' '.join(word.capitalize() for word in english_name.split('_'))
 
-@st.cache_resource(ttl=3600)  # Cache por 1 hora
+@st.cache_resource(ttl=3600)
 def load_trained_model():
     """
-    Carga el modelo entrenado. Si no existe localmente, lo descarga desde Google Drive.
-    Soporta tanto archivos .h5 como saved_model.
+    Carga el modelo entrenado optimizado para Streamlit Cloud
     """
     try:
-        # Crear directorio de modelos si no existe
-        os.makedirs("models", exist_ok=True)
-        
         # Configuración del modelo
-        MODEL_DIR = "models/inceptionv3_food101"
-        MODEL_H5 = f"{MODEL_DIR}.h5"
+        MODEL_PATH = "models/inceptionv3_food101.h5"
         GOOGLE_DRIVE_FILE_ID = "1aopQMrls2c4eRfhCCk2csrNm-ftcth3i"
         
-        # Mostrar información de depuración
-        st.info(f"Buscando modelo en: {os.path.abspath(MODEL_H5)}")
+        # Crear directorio si no existe
+        os.makedirs("models", exist_ok=True)
         
-        # Verificar si ya tenemos el modelo en formato .h5 o saved_model
-        if os.path.exists(MODEL_H5) or os.path.exists(MODEL_DIR):
+        # Verificar si el modelo ya existe y es válido
+        if os.path.exists(MODEL_PATH):
             try:
-                # Verificar si es un archivo .h5
-                if os.path.exists(MODEL_H5):
-                    file_size = os.path.getsize(MODEL_H5)
-                    st.info(f"Archivo .h5 encontrado. Tamaño: {file_size/1024/1024:.2f} MB")
+                file_size = os.path.getsize(MODEL_PATH)
+                if file_size > 50 * 1024 * 1024:  # Al menos 50MB
+                    st.info(f"Cargando modelo existente ({file_size/1024/1024:.1f} MB)...")
                     
-                    if file_size < 100 * 1024 * 1024:  # Menos de 100MB probablemente está corrupto
-                        st.warning(f"⚠️ El archivo del modelo parece estar corrupto o incompleto ({file_size/1024/1024:.2f} MB). Volviendo a descargar...")
-                        os.remove(MODEL_H5)
-                    else:
-                        with st.spinner("Cargando modelo local (formato .h5)..."):
-                            try:
-                                model = load_model(MODEL_H5)
-                                st.success("✅ Modelo cargado exitosamente desde archivo .h5 local")
-                                return model
-                            except Exception as e:
-                                st.error(f"Error al cargar el archivo .h5: {str(e)}")
-                                os.remove(MODEL_H5)  # Eliminar archivo corrupto
-                
-                # Verificar si es un saved_model
-                if os.path.exists(MODEL_DIR):
-                    st.info("Buscando modelo en formato saved_model...")
-                    with st.spinner("Cargando modelo local (formato saved_model)..."):
-                        try:
-                            model = tf.keras.models.load_model(MODEL_DIR)
-                            st.success("✅ Modelo cargado exitosamente desde saved_model local")
-                            return model
-                        except Exception as e:
-                            st.error(f"Error al cargar saved_model: {str(e)}")
-                            import shutil
-                            shutil.rmtree(MODEL_DIR)
-                            
-            except Exception as e:
-                st.warning(f"⚠️ Error al cargar el modelo local: {str(e)}. Intentando descargar...")
-                # Limpiar archivos corruptos
-                if os.path.exists(MODEL_H5):
-                    os.remove(MODEL_H5)
-                if os.path.exists(MODEL_DIR):
-                    import shutil
-                    shutil.rmtree(MODEL_DIR)
-        
-        # Si llegamos aquí, necesitamos descargar el modelo
-        with st.spinner("Descargando modelo desde Google Drive (esto puede tomar varios minutos)..."):
-            try:
-                # Primero intentamos descargar como .h5
-                temp_file = os.path.join("models", "temp_model.h5")
-                url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
-                
-                # Asegurarse de que el directorio existe
-                os.makedirs(os.path.dirname(temp_file), exist_ok=True)
-                
-                # Configurar SSL para evitar problemas de certificado
-                import ssl
-                ssl._create_default_https_context = ssl._create_unverified_context
-                
-                st.info("Descargando modelo (puede tardar varios minutos)...")
-                
-                # Usar gdown para descargar con más información de depuración
-                import gdown
-                st.info(f"URL de descarga: {url}")
-                st.info(f"Guardando en: {os.path.abspath(temp_file)}")
-                
-                # Descargar con verificación
-                output = gdown.download(url, temp_file, quiet=False, fuzzy=True)
-                st.info(f"Resultado de la descarga: {output}")
-                
-                # Verificar que el archivo se descargó correctamente
-                if os.path.exists(temp_file):
-                    file_size = os.path.getsize(temp_file)
-                    st.info(f"Tamaño del archivo descargado: {file_size/1024/1024:.2f} MB")
+                    # Configurar opciones de carga para evitar errores de compatibilidad
+                    custom_objects = {}
                     
-                    if file_size > 100 * 1024 * 1024:  # Verificar tamaño razonable
-                        try:
-                            # Intentar cargar como .h5 con diferentes métodos
-                            st.info("Analizando archivo .h5...")
-                            try:
-                                # 1. Primero verificar la estructura del archivo HDF5
-                                import h5py
-                                with h5py.File(temp_file, 'r') as f:
-                                    st.info("Estructura del archivo .h5:")
-                                    for key in f.keys():
-                                        st.info(f"- {key}: {f[key]}")
-                                
-                                # 2. Intentar cargar con load_model de Keras
-                                st.info("\n1️⃣ Intentando cargar con keras.models.load_model...")
-                                try:
-                                    from keras.models import load_model as keras_load_model
-                                    model = keras_load_model(temp_file)
-                                    st.success("✅ ¡Modelo cargado exitosamente con keras.models.load_model!")
-                                    os.rename(temp_file, MODEL_H5)
-                                    return model
-                                except Exception as e1:
-                                    st.error(f"❌ Error con keras.models.load_model: {str(e1)}")
-                                
-                                # 3. Intentar cargar con tensorflow.keras
-                                st.info("\n2️⃣ Intentando cargar con tensorflow.keras.models.load_model...")
-                                try:
-                                    model = tf.keras.models.load_model(temp_file)
-                                    st.success("✅ ¡Modelo cargado exitosamente con tensorflow.keras!")
-                                    os.rename(temp_file, MODEL_H5)
-                                    return model
-                                except Exception as e2:
-                                    st.error(f"❌ Error con tensorflow.keras: {str(e2)}")
-                                
-                                # 4. Intentar cargar solo los pesos
-                                st.info("\n3️⃣ Intentando cargar solo los pesos...")
-                                try:
-                                    # Crear un modelo temporal con la misma arquitectura
-                                    from keras.applications.inception_v3 import InceptionV3
-                                    from keras.layers import Dense, GlobalAveragePooling2D
-                                    from keras.models import Model
-                                    
-                                    base_model = InceptionV3(weights=None, include_top=False)
-                                    x = base_model.output
-                                    x = GlobalAveragePooling2D()(x)
-                                    predictions = Dense(101, activation='softmax')(x)
-                                    model = Model(inputs=base_model.input, outputs=predictions)
-                                    
-                                    # Cargar los pesos
-                                    model.load_weights(temp_file)
-                                    st.success("✅ ¡Pesos cargados exitosamente en un modelo InceptionV3!")
-                                    os.rename(temp_file, MODEL_H5)
-                                    return model
-                                except Exception as e3:
-                                    st.error(f"❌ Error al cargar los pesos: {str(e3)}")
-                                
-                                # 5. Si todo falla, mostrar información detallada del error
-                                st.error("\n🔍 No se pudo cargar el modelo con ninguno de los métodos intentados.")
-                                st.error("Posibles soluciones:")
-                                st.error("1. Verifica que el archivo no esté corrupto")
-                                st.error("2. Asegúrate de que las versiones de TensorFlow/Keras sean compatibles")
-                                st.error("3. Intenta volver a guardar el modelo con las mismas versiones")
-                                
-                                raise Exception("No se pudo cargar el modelo con ningún método disponible")
-                                
-                            except Exception as e:
-                                st.error(f"❌ Error inesperado: {str(e)}")
-                                raise
-                        except Exception as e:
-                            st.warning(f"No es un archivo .h5 válido: {str(e)}. Intentando como saved_model...")
-                            # Podría ser un saved_model comprimido
-                            try:
-                                import zipfile
-                                st.info("Intentando extraer como archivo ZIP...")
-                                with zipfile.ZipFile(temp_file, 'r') as zip_ref:
-                                    zip_ref.extractall(MODEL_DIR)
-                                # Verificar si se extrajo correctamente
-                                if os.path.exists(os.path.join(MODEL_DIR, 'saved_model.pb')):
-                                    st.info("Archivo saved_model.pb encontrado, cargando modelo...")
-                                    model = tf.keras.models.load_model(MODEL_DIR)
-                                    st.success(f"✅ Modelo saved_model descargado y cargado exitosamente")
-                                    return model
-                                else:
-                                    st.error("❌ El archivo ZIP no contiene un modelo válido (no se encontró saved_model.pb)")
-                            except Exception as e2:
-                                st.error(f"❌ No se pudo extraer ni cargar el archivo: {str(e2)}")
-                    else:
-                        st.error(f"❌ El archivo descargado es demasiado pequeño ({file_size/1024/1024:.2f} MB). Debería ser mayor a 100MB.")
-                    
-                    # Mostrar contenido del directorio temporal para depuración
-                    st.info("Contenido del directorio temporal:")
-                    for f in os.listdir("models"):
-                        try:
-                            size = os.path.getsize(os.path.join("models", f))
-                            st.info(f"- {f} ({size/1024/1024:.2f} MB)")
-                        except:
-                            st.info(f"- {f} (error al obtener tamaño)")
-                    
-                    # Limpiar archivo temporal
-                    if os.path.exists(temp_file):
-                        os.remove(temp_file)
+                    # Intentar cargar el modelo con diferentes configuraciones
+                    try:
+                        model = tf.keras.models.load_model(
+                            MODEL_PATH, 
+                            custom_objects=custom_objects,
+                            compile=False
+                        )
+                        
+                        # Recompilar el modelo con configuración básica
+                        model.compile(
+                            optimizer='adam',
+                            loss='categorical_crossentropy',
+                            metrics=['accuracy']
+                        )
+                        
+                        st.success("✅ Modelo cargado exitosamente")
+                        return model
+                        
+                    except Exception as e:
+                        st.warning(f"Error al cargar modelo existente: {str(e)}")
+                        # Eliminar archivo corrupto
+                        os.remove(MODEL_PATH)
                 else:
-                    st.error("❌ No se pudo descargar el archivo. Verifica que el ID de Google Drive sea correcto.")
-                
+                    st.warning("Archivo de modelo muy pequeño, re-descargando...")
+                    os.remove(MODEL_PATH)
             except Exception as e:
-                st.error(f"❌ Error al descargar el modelo: {str(e)}")
-                import traceback
-                st.error(f"Detalles del error: {traceback.format_exc()}")
+                st.warning(f"Error verificando modelo: {str(e)}")
         
-        # Mostrar información adicional de ayuda
-        st.error("""
-        ❌ No se pudo cargar el modelo. Por favor verifica:
-        1. Que el archivo en Google Drive sea público (cualquiera con el enlace puede verlo)
-        2. Que el ID del archivo sea correcto
-        3. Que el archivo sea un modelo .h5 o saved_model.zip válido
-        4. Que tengas suficiente espacio en disco
-        """)
-        return None
+        # Descargar el modelo
+        st.info("Descargando modelo desde Google Drive...")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
         
+        try:
+            # URL directa de descarga
+            url = f'https://drive.google.com/uc?export=download&id={GOOGLE_DRIVE_FILE_ID}'
+            
+            # Descargar con requests para mejor control
+            response = requests.get(url, stream=True)
+            
+            if response.status_code == 200:
+                total_size = int(response.headers.get('content-length', 0))
+                
+                with open(MODEL_PATH, 'wb') as f:
+                    downloaded = 0
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_size > 0:
+                                progress = downloaded / total_size
+                                progress_bar.progress(progress)
+                                status_text.text(f"Descargado: {downloaded/1024/1024:.1f} MB / {total_size/1024/1024:.1f} MB")
+                
+                progress_bar.progress(1.0)
+                status_text.text("Descarga completada")
+                
+            else:
+                # Fallback con gdown
+                st.info("Intentando descarga alternativa con gdown...")
+                gdown.download(
+                    f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}',
+                    MODEL_PATH,
+                    quiet=False
+                )
+        
+        except Exception as e:
+            st.error(f"Error en descarga: {str(e)}")
+            # Intentar descarga directa con gdown como último recurso
+            try:
+                st.info("Intentando descarga directa...")
+                gdown.download(
+                    f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}',
+                    MODEL_PATH,
+                    quiet=False
+                )
+            except Exception as e2:
+                st.error(f"Error en descarga alternativa: {str(e2)}")
+                return None
+        
+        # Limpiar elementos de progreso
+        progress_bar.empty()
+        status_text.empty()
+        
+        # Verificar descarga exitosa
+        if not os.path.exists(MODEL_PATH):
+            st.error("❌ No se pudo descargar el modelo")
+            return None
+        
+        file_size = os.path.getsize(MODEL_PATH)
+        if file_size < 50 * 1024 * 1024:
+            st.error(f"❌ Archivo descargado muy pequeño: {file_size/1024/1024:.1f} MB")
+            os.remove(MODEL_PATH)
+            return None
+        
+        st.success(f"✅ Modelo descargado: {file_size/1024/1024:.1f} MB")
+        
+        # Cargar el modelo descargado
+        try:
+            st.info("Cargando modelo en memoria...")
+            
+            # Configurar TensorFlow para mayor compatibilidad
+            tf.config.run_functions_eagerly(False)
+            
+            model = tf.keras.models.load_model(
+                MODEL_PATH,
+                compile=False  # No compilar automáticamente
+            )
+            
+            # Recompilar con configuración básica
+            model.compile(
+                optimizer='adam',
+                loss='categorical_crossentropy',
+                metrics=['accuracy']
+            )
+            
+            st.success("✅ Modelo cargado y listo para usar")
+            return model
+            
+        except Exception as e:
+            st.error(f"❌ Error al cargar el modelo: {str(e)}")
+            # Mostrar información adicional para debugging
+            try:
+                import h5py
+                with h5py.File(MODEL_PATH, 'r') as f:
+                    st.info("Estructura del archivo HDF5:")
+                    def print_structure(name, obj):
+                        st.write(f"- {name}: {type(obj)}")
+                    f.visititems(print_structure)
+            except Exception as h5_error:
+                st.error(f"No se puede analizar el archivo HDF5: {str(h5_error)}")
+            
+            return None
+    
     except Exception as e:
         st.error(f"❌ Error inesperado: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
         return None
 
+# Cargar modelo
 model = load_trained_model()
 
 if model is None:
-    st.error(t("error_loading_model"))
+    st.error("❌ No se pudo cargar el modelo. La aplicación no puede continuar.")
+    st.info("""
+    **Posibles soluciones:**
+    1. Verifica que el enlace de Google Drive sea público
+    2. Asegúrate de que el ID del archivo sea correcto
+    3. Verifica que el archivo sea un modelo .h5 válido de TensorFlow/Keras
+    4. Intenta recargar la página
+    """)
     st.stop()
 
 @st.cache_data
