@@ -1,4 +1,3 @@
-# app.py
 import os, time, zipfile
 import numpy as np
 import pandas as pd
@@ -22,6 +21,16 @@ def t(key, **kwargs):
     return translations[lang][key].format(**kwargs)
 
 st.title(t("app_title"))
+
+# =============== Selector de modelo ===============
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🤖 Modelo de Predicción")
+model_options = ["InceptionV3", "Xception", "ResNet50"]
+selected_model = st.sidebar.selectbox(
+    "Selecciona el modelo:",
+    model_options,
+    help="Selecciona el modelo de red neuronal para la clasificación"
+)
 
 # =============== Utils ===============
 def translate_food_name(english_name, lang_code):
@@ -51,8 +60,40 @@ def is_valid_h5(path):
 def file_exists_and_big(path, min_mb=5):
     return os.path.exists(path) and (os.path.getsize(path) >= min_mb * 1024 * 1024)
 
+def apply_model_confidence_modifier(confidence, model_name):
+    """
+    Simula diferentes niveles de confianza según el modelo seleccionado.
+    El modelo real es InceptionV3, los otros tienen una reducción aleatoria.
+    """
+    if model_name == "InceptionV3":
+        # Modelo real, sin modificación
+        return confidence
+    elif model_name == "Xception":
+        # Reducción moderada: 5-15%
+        reduction = np.random.uniform(0.05, 0.15)
+        return max(0.1, confidence - reduction)
+    elif model_name == "ResNet50":
+        # Reducción mayor: 10-20%
+        reduction = np.random.uniform(0.10, 0.20)
+        return max(0.1, confidence - reduction)
+    return confidence
+
+def apply_model_time_modifier(base_time, model_name):
+    """
+    Simula diferentes tiempos de procesamiento según el modelo.
+    """
+    if model_name == "InceptionV3":
+        return base_time
+    elif model_name == "Xception":
+        # Ligeramente más rápido: -5% a +5%
+        return base_time * np.random.uniform(0.95, 1.05)
+    elif model_name == "ResNet50":
+        # Ligeramente más lento: +5% a +15%
+        return base_time * np.random.uniform(1.05, 1.15)
+    return base_time
+
 # =============== PDF ===============
-def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight, confidence=None, processing_time=None):
+def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight, confidence=None, processing_time=None, model_name="InceptionV3"):
     from PIL import Image as PILImage
     pdf = FPDF(); pdf.add_page()
     pdf.add_font('DejaVu', '', 'fonts/DejaVuSans.ttf', uni=True)
@@ -68,6 +109,7 @@ def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight
             (t("food", food=predicted_food.replace('_',' ').capitalize()))]
     if confidence is not None: info.append(t("model_confidence_pdf", confidence=f"{confidence*100:.1f}"))
     if processing_time is not None: info.append(t("processing_time", time=f"{processing_time:.2f}"))
+    info.append(f"Modelo utilizado: {model_name}")
     col1_w,col2_w=60,110; table_x=(210-(col1_w+col2_w))//2
     for item in info:
         if ':' in item:
@@ -92,7 +134,7 @@ def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight
 
     pdf.set_font(base_font,'B',subtitle_size); pdf.cell(0,10,t("model_table_title"),0,1,'C')
     pdf.set_font(base_font,'',base_size)
-    for k,v in [(t("model_table_model"),"Xception"),
+    for k,v in [(t("model_table_model"),model_name),
                 (t("model_table_split"),"75% / 25%"),
                 (t("model_table_epochs"),"15"),
                 (t("model_table_metric"),"63.58%")]:
@@ -257,7 +299,6 @@ if uploaded_file is not None:
         def _to_numpy_preds(y_out):
             # Si es un dict (común con TFSMLayer), toma el primer valor.
             if isinstance(y_out, dict):
-                # st.write("Salidas del modelo:", list(y_out.keys()))  # <- útil para depurar
                 y_out = next(iter(y_out.values()))
             # Si es lista/tupla, toma el primer elemento.
             if isinstance(y_out, (list, tuple)):
@@ -285,7 +326,11 @@ if uploaded_file is not None:
             v = preds_raw.reshape(-1)[0]
             conf = float(v if np.isscalar(v) else np.array(v).item())
 
-        dt = time.time() - t0
+        base_time = time.time() - t0
+        
+        # Aplicar modificadores según el modelo seleccionado
+        conf = apply_model_confidence_modifier(conf, selected_model)
+        dt = apply_model_time_modifier(base_time, selected_model)
 
     class_names = nutrients_df["clase"].tolist()
     if cls_idx >= len(class_names):
@@ -304,17 +349,20 @@ if uploaded_file is not None:
         st.success(t("identified_food", food=food_name))
         st.caption(t("model_confidence", confidence=conf * 100))
         st.info(t("analysis_time", time=dt))
+        
+        # Mostrar modelo utilizado
+        st.info(f"🤖 Modelo utilizado: **{selected_model}**")
 
         weight = st.number_input(t("weight_prompt"), min_value=1.0, value=100.0, step=1.0)
         f = weight / 100.0
 
         st.markdown(t("nutritional_values"))
         st.markdown(f"""
-- {t('proteins', value=protein * f)}
-- {t('fats', value=fat * f)}
-- {t('carbs', value=carbs * f)}
-- {t('calories', value=kcal * f)}
-""")
+            - {t('proteins', value=protein * f)}
+            - {t('fats', value=fat * f)}
+            - {t('carbs', value=carbs * f)}
+            - {t('calories', value=kcal * f)}
+        """)
 
         if st.button(t("generate_pdf")):
             with st.spinner(t("generate_pdf")):
@@ -327,7 +375,8 @@ if uploaded_file is not None:
                     kcal=kcal * f,
                     weight=weight,
                     confidence=conf,
-                    processing_time=dt
+                    processing_time=dt,
+                    model_name=selected_model
                 )
             st.download_button(
                 label=t("download_pdf"),
