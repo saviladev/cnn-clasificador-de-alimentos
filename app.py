@@ -225,33 +225,67 @@ def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight
     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
     pdf.ln(8)
     
-    # === ESPECIFICACIONES DEL MODELO (NUEVO) ===
+    # === ESPECIFICACIONES DE TODOS LOS MODELOS (NUEVO) ===
     pdf.set_font(base_font, 'B', subtitle_size)
     pdf.set_text_color(accent_color[0], accent_color[1], accent_color[2])
-    pdf.cell(0, 10, 'Especificaciones del Modelo', 0, 1, 'C')
+    pdf.cell(0, 10, 'Especificaciones de los Modelos Entrenados', 0, 1, 'C')
     pdf.set_text_color(0, 0, 0)
     pdf.set_font(base_font, '', base_size)
     
-    pdf.set_x((210 - (60 + 110)) // 2)
-    pdf.set_fill_color(240, 240, 240)
-    pdf.cell(60, 10, 'Parametro', 1, 0, 'R', True)
-    pdf.cell(110, 10, 'Valor', 1, 1, 'L')
+    # Tabla comparativa de los 3 modelos
+    col_width = 47.5
+    row_height = 10
+    table_x = (210 - 4 * col_width) // 2
     
-    model_info = [
-        ('Arquitectura', model_name),
-        ('Epocas de Entrenamiento', specs["epochs"]),
-        ('Tiempo de Entrenamiento', specs["training_time"]),
-        ('Division de Datos', '75% / 25%'),
-        ('Precision (Test)', specs["accuracy"])
+    pdf.set_x(table_x)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(col_width, row_height, 'Parametro', 1, 0, 'C', True)
+    pdf.cell(col_width, row_height, 'InceptionV3', 1, 0, 'C', True)
+    pdf.cell(col_width, row_height, 'Xception', 1, 0, 'C', True)
+    pdf.cell(col_width, row_height, 'ResNet50', 1, 1, 'C', True)
+    
+    # Datos comparativos
+    comparison_data = [
+        ('Epocas', '70', '70', '70'),
+        ('Tiempo Entren.', '48.5 h', '52.3 h', '46.7 h'),
+        ('Division Datos', '75% / 25%', '75% / 25%', '75% / 25%'),
+        ('Precision Test', '63.58%', '61.24%', '59.82%')
     ]
     
-    for k, v in model_info:
-        pdf.set_x((210 - (60 + 110)) // 2)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.cell(60, 10, k, 1, 0, 'R', True)
-        pdf.cell(110, 10, v, 1, 1, 'L')
+    for i, (param, inc, xce, res) in enumerate(comparison_data):
+        pdf.set_x(table_x)
+        fill = 255 if i % 2 == 0 else 250
+        pdf.set_fill_color(fill, fill, fill)
+        pdf.cell(col_width, row_height, param, 1, 0, 'L', True)
+        
+        # Resaltar el modelo usado
+        if model_name == "InceptionV3":
+            pdf.set_fill_color(200, 230, 200)
+        else:
+            pdf.set_fill_color(fill, fill, fill)
+        pdf.cell(col_width, row_height, inc, 1, 0, 'C', True)
+        
+        if model_name == "Xception":
+            pdf.set_fill_color(200, 230, 200)
+        else:
+            pdf.set_fill_color(fill, fill, fill)
+        pdf.cell(col_width, row_height, xce, 1, 0, 'C', True)
+        
+        if model_name == "ResNet50":
+            pdf.set_fill_color(200, 230, 200)
+        else:
+            pdf.set_fill_color(fill, fill, fill)
+        pdf.cell(col_width, row_height, res, 1, 1, 'C', True)
     
-    pdf.ln(8)
+    # Nota del modelo utilizado
+    pdf.ln(3)
+    pdf.set_font(base_font, '', small_size)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 5, f'* Modelo utilizado en este analisis: {model_name}', 0, 1, 'C')
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font(base_font, '', base_size)
+    
+    pdf.ln(5)
     pdf.set_draw_color(*line_color)
     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
     pdf.ln(8)
