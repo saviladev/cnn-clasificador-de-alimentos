@@ -290,6 +290,56 @@ def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight
     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
     pdf.ln(8)
     
+    # === MATRICES DE CONFUSIÓN ===
+    pdf.add_page()  # Nueva página para las matrices
+    pdf.set_font(base_font, 'B', subtitle_size)
+    pdf.set_text_color(accent_color[0], accent_color[1], accent_color[2])
+    pdf.ln(5)
+    pdf.cell(0, 10, 'Matrices de Confusion de los Modelos', 0, 1, 'C')
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(5)
+    
+    # Mapeo de nombres de archivos
+    confusion_matrices = {
+        'InceptionV3': 'graphics/cm_InceptionV3.png',
+        'Xception': 'graphics/cm_Xception.png',
+        'ResNet50': 'graphics/cm_ResNet50.png'
+    }
+    
+    # Mostrar las 3 matrices (sin el híbrido)
+    models_order = ['InceptionV3', 'Xception', 'ResNet50']
+    
+    for idx, model in enumerate(models_order):
+        cm_path = confusion_matrices[model]
+        
+        if os.path.exists(cm_path):
+            # Título del modelo
+            pdf.set_font(base_font, 'B', base_size)
+            if model == model_name:
+                pdf.set_text_color(accent_color[0], accent_color[1], accent_color[2])
+                pdf.cell(0, 8, f'{model} (utilizado en este analisis)', 0, 1, 'C')
+            else:
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(0, 8, model, 0, 1, 'C')
+            pdf.set_text_color(0, 0, 0)
+            
+            # Imagen de la matriz de confusión
+            img_width = 140
+            img_x = (210 - img_width) // 2
+            img_y = pdf.get_y()
+            
+            pdf.image(cm_path, x=img_x, y=img_y, w=img_width)
+            pdf.ln(img_width * 0.75 + 10)  # Espacio después de la imagen
+            
+            # Si no es el último, agregar separador
+            if idx < len(models_order) - 1:
+                pdf.set_draw_color(*line_color)
+                pdf.line(30, pdf.get_y(), 180, pdf.get_y())
+                pdf.ln(8)
+    
+    # Volver a la primera página para continuar con McNemar
+    pdf.add_page()
+    
     # === INFORMACIÓN DEL MODELO - ELIMINADA (redundante) ===""
     
     # === TEST DE MCNEMAR ===
