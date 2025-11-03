@@ -290,28 +290,7 @@ def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight
     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
     pdf.ln(8)
     
-    # === INFORMACIÓN DEL MODELO (ORIGINAL) ===
-    pdf.set_font(base_font, 'B', subtitle_size)
-    pdf.set_text_color(accent_color[0], accent_color[1], accent_color[2])
-    pdf.cell(0, 10, t("model_table_title"), 0, 1, 'C')
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font(base_font, '', base_size)
-    
-    for k, v in [
-        (t("model_table_model"), model_name),
-        (t("model_table_split"), "75% / 25%"),
-        (t("model_table_epochs"), "70"),
-        (t("model_table_metric"), specs["accuracy"])
-    ]:
-        pdf.set_x((210 - (60 + 110)) // 2)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.cell(60, 10, k, 1, 0, 'R', True)
-        pdf.cell(110, 10, v, 1, 1, 'L')
-    
-    pdf.ln(8)
-    pdf.set_draw_color(*line_color)
-    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
-    pdf.ln(8)
+    # === INFORMACIÓN DEL MODELO - ELIMINADA (redundante) ===""
     
     # === TEST DE MCNEMAR ===
     pdf.set_font(base_font, 'B', subtitle_size)
