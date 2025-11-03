@@ -337,10 +337,12 @@ def generate_pdf_report(image, predicted_food, protein, fat, carbs, kcal, weight
                 pdf.line(30, pdf.get_y(), 180, pdf.get_y())
                 pdf.ln(8)
     
-    # Volver a la primera página para continuar con McNemar
-    pdf.add_page()
+    pdf.ln(8)
+    pdf.set_draw_color(*line_color)
+    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+    pdf.ln(8)
     
-    # === INFORMACIÓN DEL MODELO - ELIMINADA (redundante) ===""
+    # === TEST DE MCNEMAR (en la misma página si hay espacio) ===
     
     # === TEST DE MCNEMAR ===
     pdf.set_font(base_font, 'B', subtitle_size)
